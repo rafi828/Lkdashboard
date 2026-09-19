@@ -45,6 +45,7 @@ export default async function handler(req, res) {
     const t = totalsByCode[r.agent_code] || { actual: 0, target: 0 };
     domains[r.domain].actual += t.actual;
     domains[r.domain].target += t.target;
+    if (t.actual === 0 && t.target === 0) return; // סוכן בלי מכירות ובלי יעד בתקופה - לא מוצג בכלל
     domains[r.domain].agents.push({
       agent_code: r.agent_code,
       agent_name: r.agent_name,
@@ -79,6 +80,7 @@ export default async function handler(req, res) {
         const t = unclassifiedTotals[code] || { actual: 0, target: 0 };
         domains['לא מסווג'].actual += t.actual;
         domains['לא מסווג'].target += t.target;
+        if (t.actual === 0 && t.target === 0) return;
         domains['לא מסווג'].agents.push({ agent_code: code, agent_name: nameMap[code] || null, actual: t.actual, target: t.target });
       });
     }
