@@ -107,26 +107,49 @@ export default function TargetsDashboard() {
             })}
           </div>
 
-          {data.domains
-            .slice()
-            .sort((a, b) => b.agents.length - a.agents.length)
-            .map((d, idx) => (
-              <DomainChart key={d.domain} domain={d} large={idx === 0} />
-            ))}
+          {(() => {
+            const classified = data.domains.filter((d) => d.domain !== 'לא מסווג');
+            const unclassified = data.domains.find((d) => d.domain === 'לא מסווג');
+            const sorted = classified.slice().sort((a, b) => b.agents.length - a.agents.length);
+            const [biggest, ...rest] = sorted;
+
+            return (
+              <>
+                {biggest && <DomainChart domain={biggest} large />}
+
+                {rest.length > 0 && (
+                  <div style={styles.smallDomainsGrid}>
+                    {rest.map((d) => (
+                      <DomainChart key={d.domain} domain={d} large={false} />
+                    ))}
+                  </div>
+                )}
+
+                {unclassified && unclassified.agents.length > 0 && (
+                  <div style={styles.unclassifiedWrap}>
+                    <DomainChart domain={unclassified} large={false} muted />
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
     </Layout>
   );
 }
 
-function DomainChart({ domain, large }) {
+function DomainChart({ domain, large, muted }) {
   const maxVal = Math.max(1, ...domain.agents.flatMap((a) => [a.actual, a.target]));
-  const chartH = large ? 180 : 120;
+  const chartH = large ? 180 : 100;
 
   return (
-    <div style={{ ...styles.card, ...styles.chartCard }}>
+    <div style={{ ...styles.card, ...styles.chartCard, ...(muted ? styles.mutedCard : {}) }}>
       <div style={styles.chartHead}>
-        <div style={styles.chartTitle}>{domain.domain} - פירוט לפי סוכן</div>
+        <div style={styles.chartTitle}>
+          {domain.domain} - פירוט לפי סוכן
+          {muted && <span style={styles.unclassifiedBadge}>ממתין לשיוך</span>}
+        </div>
         <div style={styles.legend}>
           <span><i style={{ ...styles.dot, background: '#dc2626' }} /> בפועל</span>
           <span><i style={{ ...styles.dot, background: '#111827' }} /> יעד</span>
@@ -141,8 +164,8 @@ function DomainChart({ domain, large }) {
           return (
             <div key={a.agent_code} style={styles.barGroup}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: chartH }}>
-                <div style={{ width: large ? 30 : 22, height: Math.max(0, actualH), background: '#dc2626', borderRadius: '4px 4px 0 0' }} />
-                <div style={{ width: large ? 30 : 22, height: Math.max(0, targetH), background: '#111827', borderRadius: '4px 4px 0 0' }} />
+                <div style={{ width: large ? 30 : 20, height: Math.max(0, actualH), background: '#dc2626', borderRadius: '4px 4px 0 0' }} />
+                <div style={{ width: large ? 30 : 20, height: Math.max(0, targetH), background: '#111827', borderRadius: '4px 4px 0 0' }} />
               </div>
               <div style={styles.agentName}>{a.agent_name || a.agent_code}</div>
               <div style={styles.agentValues}>
@@ -180,4 +203,11 @@ const styles = {
   barGroup: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 60 },
   agentName: { fontSize: 12, fontWeight: 600, textAlign: 'center', color: '#374151' },
   agentValues: { fontSize: 10, color: '#9ca3af', textAlign: 'center' },
+  smallDomainsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 },
+  unclassifiedWrap: { marginTop: 4 },
+  mutedCard: { background: '#fafafa', borderStyle: 'dashed' },
+  unclassifiedBadge: {
+    marginInlineStart: 10, fontSize: 11, fontWeight: 700, color: '#d97706',
+    background: '#ffedd5', padding: '2px 8px', borderRadius: 10,
+  },
 };
