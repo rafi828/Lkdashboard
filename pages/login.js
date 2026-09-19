@@ -136,12 +136,6 @@ export default function LoginPage() {
         <button type="submit" disabled={loading} style={styles.button}>
           {loading ? 'מתחבר...' : 'התחבר'}
         </button>
-
-        <p style={styles.hint}>
-          משתמשי דוגמה (סיסמה לכולם: password123):<br />
-          admin@example.com · manager@example.com · user1@example.com · user2@example.com<br />
-          בכניסה הראשונה תתבקש לסרוק קוד QR עם Google Authenticator.
-        </p>
       </form>
     </div>
   );
