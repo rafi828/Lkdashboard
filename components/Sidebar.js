@@ -19,6 +19,11 @@ const NAV = [
 export default function Sidebar() {
   const router = useRouter();
 
+  async function handleLogout() {
+    await fetch('/api/logout', { method: 'POST' });
+    router.push('/login');
+  }
+
   return (
     <div style={styles.sidebar}>
       <div style={styles.brand}>
@@ -39,6 +44,12 @@ export default function Sidebar() {
           })}
         </div>
       ))}
+
+      <div style={styles.spacer} />
+
+      <button onClick={handleLogout} style={styles.logoutBtn}>
+        התנתקות
+      </button>
     </div>
   );
 }
@@ -61,5 +72,10 @@ const styles = {
   navItemActive: {
     display: 'block', background: '#dc2626', color: '#fff', fontSize: 14, fontWeight: 700,
     padding: '10px 14px', borderRadius: 8, textDecoration: 'none',
+  },
+  spacer: { flexGrow: 1 },
+  logoutBtn: {
+    background: 'transparent', border: '1px solid #374151', color: '#d1d5db',
+    fontSize: 14, fontWeight: 600, padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
   },
 };
