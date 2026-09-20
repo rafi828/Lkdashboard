@@ -92,12 +92,29 @@ export default async function handler(req, res) {
     { actual: 0, target: 0 }
   );
 
+  // מוסיפים שדות מחושבים: הפרש ליעד, אחוז השלמה, אחוז תרומה מהסה"כ.
+  // "רווח"/"רווח %" הם placeholder (null) בכוונה - אין עדיין מקור נתונים אמיתי לרווחיות לפי סוכן/תחום.
+  function withDerived(obj, isDomain) {
+    const diff = obj.actual - obj.target;
+    const completionPct = obj.target ? (obj.actual / obj.target) * 100 : null;
+    const extra = { diff, completionPct, profit: null, profitPct: null };
+    if (isDomain) extra.contributionPct = grandTotal.actual ? (obj.actual / grandTotal.actual) * 100 : 0;
+    return { ...obj, ...extra };
+  }
+
+  const domainListWithDerived = domainList.map((d) => ({
+    ...withDerived(d, true),
+    agents: d.agents.map((a) => withDerived(a, false)),
+  }));
+
+  const grandTotalWithDerived = withDerived(grandTotal, false);
+
   return res.status(200).json({
     period,
     year,
     month,
     currentUser: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-    grandTotal,
-    domains: domainList,
+    grandTotal: grandTotalWithDerived,
+    domains: domainListWithDerived,
   });
 }
