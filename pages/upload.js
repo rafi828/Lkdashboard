@@ -35,6 +35,16 @@ const FILES = [
       </>
     ),
   },
+  {
+    key: 'quarterly', title: 'יעדים רבעוניים ללקוח', hint: 'יעד ובפועל רבעוני לפי לקוח', endpoint: '/api/upload/quarterly-targets',
+    method: 'header',
+    format: (
+      <>
+        גיליון בשם <b>"עיבוד התקדמות לקוחות יעדים"</b> (או שם שמכיל "עיבוד התקדמות").<br />
+        חייב עמודה <b>"לקוח"</b> (מספר לקוח) ועמודות היעד/בפועל לכל רבעון בשמות המדויקים מהקובץ המקורי.
+      </>
+    ),
+  },
 ];
 
 export default function UploadPage() {
@@ -115,7 +125,7 @@ const styles = {
   headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
   h1: { margin: 0, fontSize: 24, fontWeight: 700, color: '#111827' },
   subtext: { margin: '4px 0 0', fontSize: 13, color: '#6b7280' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 },
   dropzone: {
     background: '#fff', border: '2px dashed #d1d5db', borderRadius: 12, padding: '28px 18px',
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'center',
