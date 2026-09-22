@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 // כל דוח קיים/עתידי משויך כאן ל-topic key שלו. topics שהמשתמש לא רואה (מ-/api/topics) לא יופיעו בתפריט "תפריט".
 const REPORTS_BY_TOPIC = {
   sales: [
-    { href: '/dashboard/targets', name: 'יעדים מול ביצוע', desc: 'יעדים מול בפועל, לפי תחום ולפי סוכן', available: true },
+    { href: '/dashboard/targets', name: 'תקציב מול ביצוע', desc: 'יעדים מול בפועל, לפי תחום ולפי סוכן', available: true },
     { href: '/upload', name: 'טעינת קבצים', desc: 'העלאת קבצי יעדים / מכירות / סיווג', available: true },
     { href: null, name: 'יעדים רבעוניים ללקוח', desc: 'מעקב יעדי רבעון לפי לקוח', available: false },
   ],
