@@ -6,6 +6,7 @@ import { useRouter } from 'next/router';
 const REPORTS_BY_TOPIC = {
   sales: [
     { href: '/dashboard/targets', name: 'יעדים מול ביצוע', desc: 'יעדים מול בפועל, לפי תחום ולפי סוכן', available: true },
+    { href: '/upload', name: 'טעינת קבצים', desc: 'העלאת קבצי יעדים / מכירות / סיווג', available: true },
     { href: null, name: 'יעדים רבעוניים ללקוח', desc: 'מעקב יעדי רבעון לפי לקוח', available: false },
   ],
   procurement: [{ href: null, name: 'דוחות רכש', desc: 'ייבנה בהמשך', available: false }],
@@ -13,7 +14,6 @@ const REPORTS_BY_TOPIC = {
 };
 
 const SYSTEM_ITEMS = [
-  { href: '/upload', name: 'טעינת קבצים', desc: 'העלאת קבצי יעדים / מכירות / סיווג' },
   { href: '/users', name: 'ניהול משתמשים', desc: 'משתמשים, תפקידים, הרשאות לפי נושא' },
 ];
 
