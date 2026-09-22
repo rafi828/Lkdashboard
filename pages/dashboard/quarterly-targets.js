@@ -23,9 +23,15 @@ function deriveRow(r, quarter) {
     target = r.q1_target; actual = r.q1_actual;
   } else if (quarter === 'q2') {
     target = r.q2_target; actual = r.q2_actual;
+  } else if (quarter === 'q3') {
+    target = r.q3_target; actual = r.q3_actual;
+  } else if (quarter === 'q4') {
+    target = r.q4_target; actual = r.q4_actual;
   } else {
-    target = r.q1_target + r.q2_target;
-    actual = r.q1_actual + r.q2_actual;
+    // מצטבר: סכום כל 4 הרבעונים. רבעונים שעוד לא התחילו פשוט תורמים 0 לבפועל (כמו שהם בקובץ),
+    // כך שהאחוז משקף התקדמות אמיתית מול היעד השנתי המלא.
+    target = r.q1_target + r.q2_target + r.q3_target + r.q4_target;
+    actual = r.q1_actual + r.q2_actual + r.q3_actual + r.q4_actual;
   }
   const pct = target > 0 ? actual / target : 0;
   return { ...r, target, actual, pct, status: statusOf(pct) };
@@ -138,9 +144,11 @@ export default function QuarterlyTargetsPage() {
             </FilterField>
             <FilterField label="טווח תצוגה">
               <div style={styles.periodToggle}>
-                <button onClick={() => setQuarter('combined')} style={quarter === 'combined' ? styles.periodBtnActive : styles.periodBtn}>רבעון 1+2</button>
+                <button onClick={() => setQuarter('combined')} style={quarter === 'combined' ? styles.periodBtnActive : styles.periodBtn}>מצטבר (שנתי)</button>
                 <button onClick={() => setQuarter('q1')} style={quarter === 'q1' ? styles.periodBtnActive : styles.periodBtn}>רבעון 1</button>
                 <button onClick={() => setQuarter('q2')} style={quarter === 'q2' ? styles.periodBtnActive : styles.periodBtn}>רבעון 2</button>
+                <button onClick={() => setQuarter('q3')} style={quarter === 'q3' ? styles.periodBtnActive : styles.periodBtn}>רבעון 3</button>
+                <button onClick={() => setQuarter('q4')} style={quarter === 'q4' ? styles.periodBtnActive : styles.periodBtn}>רבעון 4</button>
               </div>
             </FilterField>
             <button onClick={resetFilters} style={styles.resetBtn}>איפוס סינונים</button>
