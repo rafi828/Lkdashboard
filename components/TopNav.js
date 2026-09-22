@@ -3,11 +3,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 // כל דוח קיים/עתידי משויך כאן ל-topic key שלו. topics שהמשתמש לא רואה (מ-/api/topics) לא יופיעו בתפריט "תפריט".
+// שים לב: "טעינת קבצים" תמיד אמור להישאר אחרון במערך - דוחות חדשים שיתווספו לנושא "מכירות" ייכנסו מעליו, לא מתחתיו.
 const REPORTS_BY_TOPIC = {
   sales: [
     { href: '/dashboard/targets', name: 'תקציב מול ביצוע', desc: 'יעדים מול בפועל, לפי תחום ולפי סוכן', available: true },
-    { href: '/upload', name: 'טעינת קבצים', desc: 'העלאת קבצי יעדים / מכירות / סיווג', available: true },
     { href: '/dashboard/quarterly-targets', name: 'יעדים רבעוניים ללקוח', desc: 'מעקב יעדי רבעון לפי לקוח (זמין ל-Admin)', available: true },
+    { href: '/upload', name: 'טעינת קבצים', desc: 'העלאת קבצי יעדים / מכירות / סיווג', available: true },
   ],
   procurement: [{ href: null, name: 'דוחות רכש', desc: 'ייבנה בהמשך', available: false }],
   warehouse: [{ href: null, name: 'דוחות מחסן', desc: 'ייבנה בהמשך', available: false }],
