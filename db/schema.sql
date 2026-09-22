@@ -83,10 +83,35 @@ CREATE TABLE IF NOT EXISTS user_topic_access (
 );
 
 INSERT INTO topics (key, name, sort_order) VALUES
-  ('sales', 'תקציב מול ביצוע', 1),
+  ('sales', 'מכירות', 1),
   ('procurement', 'רכש', 2),
   ('warehouse', 'פעילות מחסן', 3)
 ON CONFLICT (key) DO NOTHING;
+
+-- ==========================================================
+-- דוח "יעדים רבעוניים ללקוח" - נתוני יעד/בפועל רבעוניים ברמת לקוח בודד (לא ברמת קוד סוכן המספרי)
+-- שים לב: agent_name הוא טקסט חופשי מהקובץ (שם הסוכן כפי שמופיע שם) - לא agent_code המספרי
+-- שמשמש בשאר המערכת. לכן הדוח הזה, בשלב הזה, זמין ל-Admin בלבד (אין עדיין הצלבה בין השם למספר קוד סוכן).
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS customer_quarterly_targets (
+  id                SERIAL PRIMARY KEY,
+  customer_id       BIGINT NOT NULL,
+  customer_name     VARCHAR(255),
+  agent_name        VARCHAR(255),
+  agent_phone       VARCHAR(50),
+  target_type       VARCHAR(255),          -- הטקסט המקורי מהקובץ (חופשי)
+  target_type_simple VARCHAR(20),          -- 'רבעוני' | 'שנתי' | 'אחר / הערה' (מחושב)
+  year              INTEGER NOT NULL,
+  q1_target NUMERIC(14,2) DEFAULT 0, q1_actual NUMERIC(14,2) DEFAULT 0,
+  q2_target NUMERIC(14,2) DEFAULT 0, q2_actual NUMERIC(14,2) DEFAULT 0,
+  q3_target NUMERIC(14,2) DEFAULT 0, q3_actual NUMERIC(14,2) DEFAULT 0,
+  q4_target NUMERIC(14,2) DEFAULT 0, q4_actual NUMERIC(14,2) DEFAULT 0,
+  annual_target     NUMERIC(14,2) DEFAULT 0,
+  last_year_sales   NUMERIC(14,2) DEFAULT 0,
+  m1 NUMERIC(14,2) DEFAULT 0, m2 NUMERIC(14,2) DEFAULT 0, m3 NUMERIC(14,2) DEFAULT 0,
+  m4 NUMERIC(14,2) DEFAULT 0, m5 NUMERIC(14,2) DEFAULT 0, m6 NUMERIC(14,2) DEFAULT 0,
+  UNIQUE(customer_id, year)
+);
 
 -- ==========================================================
 -- שאילתת עזר (לא חובה כ-VIEW, אפשר גם ישירות בקוד):
