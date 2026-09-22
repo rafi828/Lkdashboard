@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS user_topic_access (
 );
 
 INSERT INTO topics (key, name, sort_order) VALUES
-  ('sales', 'מכירות', 1),
+  ('sales', 'תקציב מול ביצוע', 1),
   ('procurement', 'רכש', 2),
   ('warehouse', 'פעילות מחסן', 3)
 ON CONFLICT (key) DO NOTHING;
