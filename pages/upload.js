@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 
 const FILES = [
   {
-    key: 'classification', title: 'סיווג סוכנים לתחומים', hint: 'שיוך קוד סוכן לתחום', endpoint: '/api/upload/classification',
+    key: 'classification', group: 'main', title: 'סיווג סוכנים לתחומים', hint: 'שיוך קוד סוכן לתחום', endpoint: '/api/upload/classification',
     method: 'position',
     format: (
       <>
@@ -15,7 +15,7 @@ const FILES = [
     ),
   },
   {
-    key: 'targets', title: 'קובץ יעדים', hint: 'יעדי סוכנים לפי חודש', endpoint: '/api/upload/targets',
+    key: 'targets', group: 'main', title: 'קובץ יעדים', hint: 'יעדי סוכנים לפי חודש', endpoint: '/api/upload/targets',
     method: 'header',
     format: (
       <>
@@ -26,7 +26,7 @@ const FILES = [
     ),
   },
   {
-    key: 'matrix', title: 'מטריצת מכירות חודשית', hint: 'מכירות לפי סוכן וחודש', endpoint: '/api/upload/sales-matrix',
+    key: 'matrix', group: 'main', title: 'מטריצת מכירות חודשית', hint: 'מכירות לפי סוכן וחודש', endpoint: '/api/upload/sales-matrix',
     method: 'header',
     format: (
       <>
@@ -36,7 +36,7 @@ const FILES = [
     ),
   },
   {
-    key: 'quarterly', title: 'יעדים רבעוניים ללקוח', hint: 'יעד ובפועל רבעוני לפי לקוח', endpoint: '/api/upload/quarterly-targets',
+    key: 'quarterly', group: 'quarterly', title: 'יעדים רבעוניים ללקוח', hint: 'יעד ובפועל רבעוני לפי לקוח', endpoint: '/api/upload/quarterly-targets',
     method: 'header',
     format: (
       <>
@@ -79,45 +79,59 @@ export default function UploadPage() {
         </div>
       </div>
 
-      <div style={styles.grid}>
-        {FILES.map((f) => {
-          const st = status[f.key];
-          return (
-            <label key={f.key} style={styles.dropzone}>
-              <div style={styles.title}>{f.title}</div>
-              <div style={styles.hint}>{f.hint} · גרירה או לחיצה להעלאה</div>
-              {st?.state === 'uploading' && <div style={styles.uploading}>מעלה...</div>}
-              {st?.state === 'done' && <div style={styles.done}>✓ {st.fileName} ({st.rows} שורות)</div>}
-              {st?.state === 'error' && <div style={styles.error}>{st.message}</div>}
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                style={{ display: 'none' }}
-                onChange={(e) => e.target.files[0] && handleUpload(f, e.target.files[0])}
-              />
-              <div style={styles.formatNote}>
-                <span style={f.method === 'header' ? styles.methodTagHeader : styles.methodTagPosition}>
-                  {f.method === 'header' ? 'לפי כותרת (גמיש)' : 'לפי מיקום עמודה'}
-                </span>
-                <br />
-                {f.format}
-              </div>
-            </label>
-          );
-        })}
+      <div>
+        <div style={styles.groupTitle}>קבצי דשבורד תקציב מול ביצוע</div>
+        <div style={styles.grid}>
+          {FILES.filter((f) => f.group === 'main').map((f) => (
+            <Dropzone key={f.key} f={f} status={status[f.key]} onUpload={handleUpload} />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div style={styles.groupTitle}>קבצי דשבורד יעדים רבעוניים ללקוח</div>
+        <div style={styles.grid}>
+          {FILES.filter((f) => f.group === 'quarterly').map((f) => (
+            <Dropzone key={f.key} f={f} status={status[f.key]} onUpload={handleUpload} />
+          ))}
+        </div>
       </div>
 
       <div style={styles.note}>
-        אחרי טעינת שלושת הקבצים, דשבורד היעדים והמגמות יתעדכנו אוטומטית. סוכנים שיופיעו במכירות בלי שיוך בקובץ הסיווג
+        אחרי טעינת קבצי "תקציב מול ביצוע", הדשבורד הזה והמגמות יתעדכנו אוטומטית. סוכנים שיופיעו במכירות בלי שיוך בקובץ הסיווג
         ייכנסו לקטגוריית "לא מסווג" עד שישויכו (בקובץ סיווג מעודכן).
       </div>
 
       <div style={styles.infoCard}>
-        💡 <b>הבדל בין השניים:</b> קובץ הסיווג נקרא <b>לפי מיקום עמודה קבוע</b> - אם תשנה את הסדר, זה יישבר. קובץ היעדים
-        וקובץ המטריצה נקראים <b>לפי חיפוש כותרת</b> - אפשר לשנות סדר עמודות או להוסיף עמודות, כל עוד הכותרות המדויקות
-        האלו עדיין קיימות.
+        💡 <b>הבדל בין השניים:</b> קובץ הסיווג נקרא <b>לפי מיקום עמודה קבוע</b> - אם תשנה את הסדר, זה יישבר. שאר הקבצים
+        נקראים <b>לפי חיפוש כותרת</b> - אפשר לשנות סדר עמודות או להוסיף עמודות, כל עוד הכותרות המדויקות עדיין קיימות.
       </div>
     </Layout>
+  );
+}
+
+function Dropzone({ f, status: st, onUpload }) {
+  return (
+    <label style={styles.dropzone}>
+      <div style={styles.title}>{f.title}</div>
+      <div style={styles.hint}>{f.hint} · גרירה או לחיצה להעלאה</div>
+      {st?.state === 'uploading' && <div style={styles.uploading}>מעלה...</div>}
+      {st?.state === 'done' && <div style={styles.done}>✓ {st.fileName} ({st.rows} שורות)</div>}
+      {st?.state === 'error' && <div style={styles.error}>{st.message}</div>}
+      <input
+        type="file"
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+        onChange={(e) => e.target.files[0] && onUpload(f, e.target.files[0])}
+      />
+      <div style={styles.formatNote}>
+        <span style={f.method === 'header' ? styles.methodTagHeader : styles.methodTagPosition}>
+          {f.method === 'header' ? 'לפי כותרת (גמיש)' : 'לפי מיקום עמודה'}
+        </span>
+        <br />
+        {f.format}
+      </div>
+    </label>
   );
 }
 
@@ -126,6 +140,7 @@ const styles = {
   h1: { margin: 0, fontSize: 24, fontWeight: 700, color: '#111827' },
   subtext: { margin: '4px 0 0', fontSize: 13, color: '#6b7280' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 },
+  groupTitle: { fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 10 },
   dropzone: {
     background: '#fff', border: '2px dashed #d1d5db', borderRadius: 12, padding: '28px 18px',
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'center',
