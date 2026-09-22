@@ -50,7 +50,7 @@ export default function TargetsDashboard() {
     <Layout>
       <div style={styles.headerRow}>
         <div>
-          <h1 style={styles.h1}>יעדים מול ביצוע</h1>
+          <h1 style={styles.h1}>תקציב מול ביצוע</h1>
           <p style={styles.subtext}>ביצוע בפועל מול יעד, לפי תחום ולפי סוכן</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
