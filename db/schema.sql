@@ -65,6 +65,30 @@ CREATE INDEX IF NOT EXISTS idx_targets_period ON agent_targets(year, month);
 CREATE INDEX IF NOT EXISTS idx_sales_monthly_period ON agent_sales_monthly(year, month);
 
 -- ==========================================================
+-- נושאים (לתפריט העליון) + הרשאות משתמש-נושא
+-- Admin רואה הכל תמיד ולא צריך שורה ב-user_topic_access.
+-- Manager/User רואים רק נושאים שסומנו להם כאן.
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS topics (
+  id          SERIAL PRIMARY KEY,
+  key         VARCHAR(50) UNIQUE NOT NULL,   -- 'sales' | 'procurement' | 'warehouse' | ...
+  name        VARCHAR(100) NOT NULL,          -- 'מכירות' | 'רכש' | 'פעילות מחסן' | ...
+  sort_order  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS user_topic_access (
+  user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, topic_id)
+);
+
+INSERT INTO topics (key, name, sort_order) VALUES
+  ('sales', 'מכירות', 1),
+  ('procurement', 'רכש', 2),
+  ('warehouse', 'פעילות מחסן', 3)
+ON CONFLICT (key) DO NOTHING;
+
+-- ==========================================================
 -- שאילתת עזר (לא חובה כ-VIEW, אפשר גם ישירות בקוד):
 -- מחזירה את כל ה-IDs שמשתמש נתון (viewerId) מורשה לראות,
 -- כולל את עצמו וכל מי שנמצא תחתיו בהיררכיה בכל עומק.

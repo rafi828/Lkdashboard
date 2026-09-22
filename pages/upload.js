@@ -2,9 +2,39 @@ import { useState } from 'react';
 import Layout from '../components/Layout';
 
 const FILES = [
-  { key: 'classification', title: 'סיווג סוכנים לתחומים', hint: 'שיוך קוד סוכן לתחום', endpoint: '/api/upload/classification' },
-  { key: 'targets', title: 'קובץ יעדים', hint: 'יעדי סוכנים לפי חודש', endpoint: '/api/upload/targets' },
-  { key: 'matrix', title: 'מטריצת מכירות חודשית', hint: 'מכירות לפי סוכן וחודש', endpoint: '/api/upload/sales-matrix' },
+  {
+    key: 'classification', title: 'סיווג סוכנים לתחומים', hint: 'שיוך קוד סוכן לתחום', endpoint: '/api/upload/classification',
+    method: 'position',
+    format: (
+      <>
+        <b>עמודה A</b> - תחום (למשל "מכירות סיטונאים")<br />
+        <b>עמודה B</b> - קוד סוכן (מספר)<br />
+        <b>עמודה C</b> - שם סוכן<br />
+        שינוי סדר העמודות יגרום לקריאה שגויה - הסדר חייב להישאר כפי שהוא.
+      </>
+    ),
+  },
+  {
+    key: 'targets', title: 'קובץ יעדים', hint: 'יעדי סוכנים לפי חודש', endpoint: '/api/upload/targets',
+    method: 'header',
+    format: (
+      <>
+        חייב להכיל תא שכתוב בו בדיוק <b>"קוד סוכן"</b> - זו שורת הכותרת.<br />
+        בשורה הזו חייבות להופיע גם <b>12 עמודות בשמות החודשים בעברית</b> (ינואר, פברואר... דצמבר) - בכל סדר.<br />
+        עמודת שם הסוכן יכולה להיות בכל מקום.
+      </>
+    ),
+  },
+  {
+    key: 'matrix', title: 'מטריצת מכירות חודשית', hint: 'מכירות לפי סוכן וחודש', endpoint: '/api/upload/sales-matrix',
+    method: 'header',
+    format: (
+      <>
+        חייב להכיל תא שכתוב בו בדיוק <b>"סוכן"</b> - זו שורת הכותרת.<br />
+        עמודות החודשים חייבות להיות בתבנית <b>MM/YYYY</b> (למשל "09/2026") - בכל סדר, אין הגבלה על כמות החודשים.
+      </>
+    ),
+  },
 ];
 
 export default function UploadPage() {
@@ -55,6 +85,13 @@ export default function UploadPage() {
                 style={{ display: 'none' }}
                 onChange={(e) => e.target.files[0] && handleUpload(f, e.target.files[0])}
               />
+              <div style={styles.formatNote}>
+                <span style={f.method === 'header' ? styles.methodTagHeader : styles.methodTagPosition}>
+                  {f.method === 'header' ? 'לפי כותרת (גמיש)' : 'לפי מיקום עמודה'}
+                </span>
+                <br />
+                {f.format}
+              </div>
             </label>
           );
         })}
@@ -63,6 +100,12 @@ export default function UploadPage() {
       <div style={styles.note}>
         אחרי טעינת שלושת הקבצים, דשבורד היעדים והמגמות יתעדכנו אוטומטית. סוכנים שיופיעו במכירות בלי שיוך בקובץ הסיווג
         ייכנסו לקטגוריית "לא מסווג" עד שישויכו (בקובץ סיווג מעודכן).
+      </div>
+
+      <div style={styles.infoCard}>
+        💡 <b>הבדל בין השניים:</b> קובץ הסיווג נקרא <b>לפי מיקום עמודה קבוע</b> - אם תשנה את הסדר, זה יישבר. קובץ היעדים
+        וקובץ המטריצה נקראים <b>לפי חיפוש כותרת</b> - אפשר לשנות סדר עמודות או להוסיף עמודות, כל עוד הכותרות המדויקות
+        האלו עדיין קיימות.
       </div>
     </Layout>
   );
@@ -82,5 +125,12 @@ const styles = {
   done: { fontSize: 12, fontWeight: 600, color: '#16a34a' },
   error: { fontSize: 12, fontWeight: 600, color: '#dc2626' },
   uploading: { fontSize: 12, fontWeight: 600, color: '#d97706' },
+  formatNote: {
+    width: '100%', marginTop: 10, background: '#f9fafb', border: '1px solid #f0f0f0', borderRadius: 8,
+    padding: '10px 12px', textAlign: 'right', fontSize: 11, color: '#4b5563', lineHeight: 1.7,
+  },
+  methodTagHeader: { display: 'inline-block', fontSize: 9.5, fontWeight: 700, padding: '1px 8px', borderRadius: 8, marginBottom: 6, background: '#dbeafe', color: '#1d4ed8' },
+  methodTagPosition: { display: 'inline-block', fontSize: 9.5, fontWeight: 700, padding: '1px 8px', borderRadius: 8, marginBottom: 6, background: '#fef3c7', color: '#92400e' },
   note: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: '16px 20px', fontSize: 12, color: '#6b7280', lineHeight: 1.7 },
+  infoCard: { fontSize: 12, color: '#374151', lineHeight: 1.8, background: '#eef2ff', border: '1px dashed #c7d2fe', borderRadius: 10, padding: '14px 16px' },
 };

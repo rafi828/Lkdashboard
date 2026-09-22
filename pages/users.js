@@ -3,16 +3,43 @@ import Layout from '../components/Layout';
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [userTopics, setUserTopics] = useState({}); // { [userId]: Set(topicId) }
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user', manager_id: '', agent_code: '' });
   const [error, setError] = useState('');
 
   function load() {
     fetch('/api/users')
       .then((res) => res.json())
-      .then((d) => (d.users ? setUsers(d.users) : setError(d.error)));
+      .then((d) => {
+        if (!d.users) return setError(d.error);
+        setUsers(d.users);
+        d.users.forEach((u) => {
+          fetch(`/api/users/${u.id}/topics`)
+            .then((res) => res.json())
+            .then((td) => setUserTopics((prev) => ({ ...prev, [u.id]: new Set(td.topicIds || []) })));
+        });
+      });
   }
 
-  useEffect(load, []);
+  useEffect(() => {
+    fetch('/api/topics')
+      .then((res) => res.json())
+      .then((d) => d.topics && setTopics(d.topics));
+    load();
+  }, []);
+
+  async function toggleTopic(userId, topicId) {
+    const current = userTopics[userId] || new Set();
+    const next = new Set(current);
+    next.has(topicId) ? next.delete(topicId) : next.add(topicId);
+    setUserTopics((prev) => ({ ...prev, [userId]: next }));
+    await fetch(`/api/users/${userId}/topics`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topicIds: Array.from(next) }),
+    });
+  }
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -65,6 +92,7 @@ export default function UsersPage() {
               <th style={styles.th}>תפקיד</th>
               <th style={styles.th}>מנהל (manager_id)</th>
               <th style={styles.th}>קוד סוכן</th>
+              <th style={styles.th}>הרשאות נושא</th>
               <th style={styles.th}></th>
             </tr>
           </thead>
@@ -95,6 +123,24 @@ export default function UsersPage() {
                     style={styles.smallInput}
                     placeholder="קוד סוכן"
                   />
+                </td>
+                <td style={styles.td}>
+                  {u.role === 'admin' ? (
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>הכל (Admin)</span>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {topics.map((t) => (
+                        <label key={t.id} style={styles.topicCheck}>
+                          <input
+                            type="checkbox"
+                            checked={userTopics[u.id]?.has(t.id) || false}
+                            onChange={() => toggleTopic(u.id, t.id)}
+                          />
+                          {t.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td style={styles.td}>
                   <button onClick={() => handleDelete(u.id)} style={styles.deleteBtn}>מחק</button>
@@ -136,6 +182,7 @@ const styles = {
   smallSelect: { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' },
   smallInput: { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd', width: 70 },
   deleteBtn: { fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' },
+  topicCheck: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#374151', cursor: 'pointer' },
   form: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
   input: { fontSize: 13, padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd' },
   submitBtn: { fontSize: 13, padding: '8px 16px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer' },
