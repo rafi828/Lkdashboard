@@ -15,7 +15,9 @@ export default async function handler(req, res) {
 
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT customer_id, customer_name, agent_name, agent_phone, target_type, target_type_simple,
+    `SELECT customer_id, customer_name, agent_name, agent_email, agent_phone,
+            chanoch_email, rafi_email, david_email, amir_email,
+            target_type, target_type_simple,
             q1_target, q1_actual, q1_credit, q2_target, q2_actual, q2_credit,
             q3_target, q3_actual, q3_credit, q4_target, q4_actual, q4_credit,
             annual_target, last_year_sales, m1, m2, m3, m4, m5, m6
