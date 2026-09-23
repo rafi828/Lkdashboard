@@ -6,32 +6,37 @@ export default async function handler(req, res) {
   const currentUser = getUserFromRequest(req);
   if (!currentUser) return res.status(401).json({ error: 'לא מחובר' });
   if (currentUser.role !== 'admin') return res.status(403).json({ error: 'זמין כרגע רק למנהל מערכת' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
-  const agent = req.query.agent || null;
+  const { customerIds, year } = req.body || {};
+  if (!Array.isArray(customerIds) || customerIds.length === 0) {
+    return res.status(400).json({ error: 'לא נבחרו לקוחות לייצוא (customerIds ריק)' });
+  }
+  const y = year ? parseInt(year, 10) : new Date().getFullYear();
 
   const pool = getPool();
-  const params = [year];
-  let where = 'WHERE year = $1';
-  if (agent) {
-    params.push(agent);
-    where += ` AND agent_name = $${params.length}`;
-  }
-
   const { rows } = await pool.query(
-    `SELECT customer_id, customer_name, agent_name,
+    `SELECT customer_id, customer_name, agent_name, agent_email, agent_phone,
+            chanoch_email, rafi_email, david_email, amir_email,
             q1_target, q1_actual, q1_credit, q2_target, q2_actual, q2_credit,
             q3_target, q3_actual, q3_credit, q4_target, q4_actual, q4_credit,
             annual_target, last_year_sales
      FROM customer_quarterly_targets
-     ${where}
+     WHERE year = $1 AND customer_id = ANY($2::bigint[])
      ORDER BY customer_name`,
-    params
+    [y, customerIds]
   );
 
   // שמות העמודות כאן זהים לכותרות שבקובץ המקור ("עיבוד התקדמות לקוחות יעדים") -
   // אלו בדיוק השמות ששדות המיזוג («...») בתבנית הוורד מצפים לראות.
+  // עמודות המייל (סוכן/חנוך/רפי/דוד/אמיר) מתווספות בהתחלה כעמודות עזר - משתנות לפי לקוח בדיוק כמו בקובץ המקור.
   const exportRows = rows.map((r) => ({
+    'מייל סוכן': r.agent_email || '',
+    'טלפון סוכן': r.agent_phone || '',
+    'דואר אלקטרוני חנוך': r.chanoch_email || '',
+    'דואר אלקטרוני רפי': r.rafi_email || '',
+    'דואר אלקטרוני דוד': r.david_email || '',
+    'דוא"ל אמיר': r.amir_email || '',
     'לקוח': r.customer_id,
     'שם לקוח - 5': r.customer_name,
     'סוכן מלקוח': r.agent_name,
@@ -58,5 +63,5 @@ export default async function handler(req, res) {
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="mailmerge-export.xlsx"');
-  return res.status(200).send(buffer);
+  return res.status(200).send(Buffer.from(buffer));
 }
