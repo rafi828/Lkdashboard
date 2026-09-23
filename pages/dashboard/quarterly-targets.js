@@ -300,6 +300,13 @@ function SendModal({ quarter, quarterNum, rows, recipientField, setRecipientFiel
             {sendResult.errors?.length > 0 && ` נכשלו ${sendResult.errors.length}.`}
           </div>
         )}
+        {sendResult?.errors?.length > 0 && (
+          <div style={{ ...styles.modalNote, background: '#fef2f2', color: '#dc2626' }}>
+            {sendResult.errors.map((e, i) => (
+              <div key={i}>לקוח #{e.customer_id}: {e.message}</div>
+            ))}
+          </div>
+        )}
         {sendResult?.error && <div style={{ ...styles.modalNote, background: '#fef2f2', color: '#dc2626' }}>{sendResult.error}</div>}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
