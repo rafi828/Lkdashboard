@@ -17,6 +17,11 @@ function statusOf(pct) {
   return 'below';
 }
 
+function currentQuarter() {
+  const m = new Date().getMonth() + 1;
+  return Math.ceil(m / 3);
+}
+
 function deriveRow(r, quarter) {
   let target, actual;
   if (quarter === 'q1') {
@@ -47,6 +52,10 @@ export default function QuarterlyTargetsPage() {
   const [quarter, setQuarter] = useState('combined');
   const [sortKey, setSortKey] = useState('pct');
   const [sortDir, setSortDir] = useState('asc');
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [recipientField, setRecipientField] = useState('agent_email');
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
 
   useEffect(() => {
     fetch('/api/dashboard/quarterly-targets')
@@ -153,6 +162,7 @@ export default function QuarterlyTargetsPage() {
             </FilterField>
             <button onClick={resetFilters} style={styles.resetBtn}>איפוס סינונים</button>
             <button onClick={() => handleExport(sortedRows.map((r) => r.customer_id))} style={styles.exportBtn}>ייצוא לשליחת מייל (Word Mail Merge)</button>
+            <button onClick={() => openSendModalGuard(quarter, setSendModalOpen)} style={styles.sendBtn}>שליחת מייל</button>
           </div>
 
           {/* KPI */}
@@ -213,7 +223,93 @@ export default function QuarterlyTargetsPage() {
           </div>
         </>
       )}
+
+      {sendModalOpen && (
+        <SendModal
+          quarter={quarter}
+          quarterNum={parseInt(quarter.replace('q', ''), 10)}
+          rows={sortedRows}
+          recipientField={recipientField}
+          setRecipientField={setRecipientField}
+          sending={sending}
+          sendResult={sendResult}
+          onClose={() => { setSendModalOpen(false); setSendResult(null); }}
+          onSend={() =>
+            performSend({
+              quarter,
+              customerIds: sortedRows.filter((r) => r.target_type_simple === 'רבעוני').map((r) => r.customer_id),
+              recipientField,
+              setSending,
+              setSendResult,
+              setSendModalOpen,
+            })
+          }
+        />
+      )}
     </Layout>
+  );
+}
+
+const RECIPIENT_OPTIONS = [
+  { field: 'agent_email', label: 'מייל סוכן' },
+  { field: 'rafi_email', label: 'רפי' },
+  { field: 'chanoch_email', label: 'חנוך' },
+  { field: 'david_email', label: 'דוד' },
+  { field: 'amir_email', label: 'אמיר' },
+];
+
+function SendModal({ quarter, quarterNum, rows, recipientField, setRecipientField, sending, sendResult, onClose, onSend }) {
+  const quarterlyRows = rows.filter((r) => r.target_type_simple === 'רבעוני');
+  const skippedNotQuarterly = rows.length - quarterlyRows.length;
+  const missingEmail = quarterlyRows.filter((r) => !r[recipientField]).length;
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>שליחת מייל - רבעון {quarterNum}</div>
+        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+          נשלח לפי הסינון הנוכחי במסך ({rows.length} לקוחות)
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>שלח לפי עמודת:</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {RECIPIENT_OPTIONS.map((opt) => (
+            <label key={opt.field} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="recipientField"
+                checked={recipientField === opt.field}
+                onChange={() => setRecipientField(opt.field)}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+
+        <div style={styles.modalNote}>
+          {skippedNotQuarterly > 0 && <div>⚠ {skippedNotQuarterly} לקוחות ידולגו (סוג יעד אינו "רבעוני").</div>}
+          {missingEmail > 0 && <div>⚠ {missingEmail} לקוחות ידולגו (אין כתובת מייל בעמודה שנבחרה).</div>}
+          <div>ישלח בפועל ל-{quarterlyRows.length - missingEmail} לקוחות.</div>
+        </div>
+
+        {sendResult && !sendResult.error && (
+          <div style={{ ...styles.modalNote, background: '#f0fdf4', color: '#15803d' }}>
+            נשלחו {sendResult.sent} מיילים בהצלחה.
+            {sendResult.skippedNotQuarterly > 0 && ` דולגו ${sendResult.skippedNotQuarterly} (לא רבעוני).`}
+            {sendResult.skippedNoEmail > 0 && ` דולגו ${sendResult.skippedNoEmail} (אין מייל).`}
+            {sendResult.errors?.length > 0 && ` נכשלו ${sendResult.errors.length}.`}
+          </div>
+        )}
+        {sendResult?.error && <div style={{ ...styles.modalNote, background: '#fef2f2', color: '#dc2626' }}>{sendResult.error}</div>}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <button onClick={onClose} style={styles.resetBtn}>סגור</button>
+          <button onClick={onSend} disabled={sending} style={styles.sendBtn}>
+            {sending ? 'שולח...' : 'שלח'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -241,6 +337,43 @@ async function handleExport(customerIds) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function openSendModalGuard(quarter, setSendModalOpen) {
+  if (quarter === 'combined') {
+    alert('לא ניתן לשלוח מייל במצב "מצטבר (שנתי)" - יש לבחור רבעון ספציפי (1-4) למעלה קודם.');
+    return;
+  }
+  setSendModalOpen(true);
+}
+
+async function performSend({ quarter, customerIds, recipientField, setSending, setSendResult, setSendModalOpen }) {
+  const qNum = parseInt(quarter.replace('q', ''), 10);
+  if (qNum !== currentQuarter()) {
+    const ok = window.confirm(
+      `שים לב: הרבעון הנבחר (רבעון ${qNum}) אינו הרבעון הנוכחי (רבעון ${currentQuarter()}). האם אתה בטוח שברצונך לשלוח נתונים מרבעון אחר?`
+    );
+    if (!ok) return;
+  }
+  setSending(true);
+  setSendResult(null);
+  try {
+    const res = await fetch('/api/dashboard/quarterly-targets-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerIds, quarter: qNum, recipientField }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setSendResult({ error: data.error || 'שגיאה בשליחה' });
+    } else {
+      setSendResult(data);
+    }
+  } catch (e) {
+    setSendResult({ error: 'שגיאת רשת בשליחה' });
+  } finally {
+    setSending(false);
+  }
 }
 
 function FilterField({ label, children }) {
@@ -381,6 +514,10 @@ const styles = {
   periodBtnActive: { border: 'none', background: '#dc2626', color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' },
   resetBtn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', color: '#374151' },
   exportBtn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600 },
+  sendBtn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#111827', color: '#fff', cursor: 'pointer', fontWeight: 600 },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
+  modalBox: { background: '#fff', borderRadius: 12, padding: 24, width: 360, maxWidth: '90vw', direction: 'rtl' },
+  modalNote: { fontSize: 12, color: '#6b7280', background: '#f9fafb', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 },
   kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0,1fr))', gap: 14 },
   kpi: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 },
   chartTitle: { fontSize: 15, fontWeight: 700 },
