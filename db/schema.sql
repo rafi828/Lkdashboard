@@ -98,7 +98,12 @@ CREATE TABLE IF NOT EXISTS customer_quarterly_targets (
   customer_id       BIGINT NOT NULL,
   customer_name     VARCHAR(255),
   agent_name        VARCHAR(255),
+  agent_email       VARCHAR(255),
   agent_phone       VARCHAR(50),
+  chanoch_email     VARCHAR(255),
+  rafi_email        VARCHAR(255),
+  david_email       VARCHAR(255),
+  amir_email        VARCHAR(255),
   target_type       VARCHAR(255),          -- הטקסט המקורי מהקובץ (חופשי)
   target_type_simple VARCHAR(20),          -- 'רבעוני' | 'שנתי' | 'אחר / הערה' (מחושב)
   year              INTEGER NOT NULL,
