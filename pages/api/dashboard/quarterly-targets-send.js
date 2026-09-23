@@ -25,6 +25,7 @@ export default async function handler(req, res) {
   }
 
   const y = year ? parseInt(year, 10) : new Date().getFullYear();
+  console.log(`[quarterly-send] בקשת שליחה: רבעון ${q}, ${customerIds.length} לקוחות, עמודה: ${recipientField}`);
 
   const pool = getPool();
   const { rows } = await pool.query(
@@ -63,9 +64,12 @@ export default async function handler(req, res) {
       });
       sent++;
     } catch (err) {
+      console.error(`[quarterly-send] נכשל עבור לקוח #${row.customer_id}:`, err.message);
       errors.push({ customer_id: row.customer_id, message: err.message });
     }
   }
+
+  console.log(`[quarterly-send] סיכום: נשלחו ${sent}, דולגו ${skippedNotQuarterly} (לא רבעוני), דולגו ${skippedNoEmail} (אין מייל), נכשלו ${errors.length}`);
 
   return res.status(200).json({ sent, skippedNotQuarterly, skippedNoEmail, errors });
 }
