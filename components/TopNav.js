@@ -8,7 +8,6 @@ const REPORTS_BY_TOPIC = {
   sales: [
     { href: '/dashboard/targets', name: 'תקציב מול ביצוע', desc: 'יעדים מול בפועל, לפי תחום ולפי סוכן', available: true },
     { href: '/dashboard/quarterly-targets', name: 'יעדים רבעוניים ללקוח', desc: 'מעקב יעדי רבעון לפי לקוח (זמין ל-Admin)', available: true },
-    { href: '/upload', name: 'טעינת קבצים', desc: 'העלאת קבצי יעדים / מכירות / סיווג', available: true },
   ],
   procurement: [{ href: null, name: 'דוחות רכש', desc: 'ייבנה בהמשך', available: false }],
   warehouse: [{ href: null, name: 'דוחות מחסן', desc: 'ייבנה בהמשך', available: false }],

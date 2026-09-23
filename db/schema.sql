@@ -93,6 +93,16 @@ ON CONFLICT (key) DO NOTHING;
 -- שים לב: agent_name הוא טקסט חופשי מהקובץ (שם הסוכן כפי שמופיע שם) - לא agent_code המספרי
 -- שמשמש בשאר המערכת. לכן הדוח הזה, בשלב הזה, זמין ל-Admin בלבד (אין עדיין הצלבה בין השם למספר קוד סוכן).
 -- ==========================================================
+-- ==========================================================
+-- מעקב אחרי הקובץ האחרון שהועלה לכל סוג טעינה (לתצוגת "הועלה לאחרונה" במסכי הטעינה)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS file_uploads (
+  file_key    VARCHAR(50) PRIMARY KEY,   -- 'classification' | 'targets' | 'matrix' | 'quarterly'
+  filename    VARCHAR(255) NOT NULL,
+  uploaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS customer_quarterly_targets (
   id                SERIAL PRIMARY KEY,
   customer_id       BIGINT NOT NULL,

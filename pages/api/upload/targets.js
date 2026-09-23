@@ -1,6 +1,7 @@
 const { getPool } = require('../../../lib/db');
 const { parseSingleFile, requireRole } = require('../../../lib/api-helpers');
 const { parseTargetsFile } = require('../../../lib/xlsx-parser');
+const { recordFileUpload } = require('../../../lib/file-uploads');
 
 export const config = { api: { bodyParser: false } };
 
@@ -11,7 +12,7 @@ export default async function handler(req, res) {
   if (!user) return;
 
   try {
-    const { buffer, fields } = await parseSingleFile(req);
+    const { buffer, fields, filename } = await parseSingleFile(req);
     // שדה "year" בטופס ההעלאה - לאיזו שנה שייכים היעדים בקובץ (ברירת מחדל: השנה הנוכחית)
     const yearField = Array.isArray(fields.year) ? fields.year[0] : fields.year;
     const year = yearField ? parseInt(yearField, 10) : new Date().getFullYear();
@@ -42,6 +43,7 @@ export default async function handler(req, res) {
       client.release();
     }
 
+    await recordFileUpload('targets', filename, user.id);
     return res.status(200).json({ ok: true, rows: records.length, year });
   } catch (err) {
     return res.status(400).json({ error: err.message || 'שגיאה בעיבוד הקובץ' });

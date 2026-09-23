@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -31,6 +32,7 @@ function completionTier(p) {
 }
 
 export default function TargetsDashboard() {
+  const router = useRouter();
   const now = new Date();
   const [period, setPeriod] = useState('mtd');
   const [year] = useState(now.getFullYear());
@@ -54,6 +56,9 @@ export default function TargetsDashboard() {
           <p style={styles.subtext}>ביצוע בפועל מול יעד, לפי תחום ולפי סוכן</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => router.push('/dashboard/targets-upload')} style={styles.uploadBtn}>
+            📤 טעינת קבצים
+          </button>
           <div style={styles.periodToggle}>
             <button onClick={() => setPeriod('mtd')} style={period === 'mtd' ? styles.periodBtnActive : styles.periodBtn}>
               MTD - מתחילת החודש
@@ -297,6 +302,7 @@ const styles = {
   periodBtn: { border: 'none', background: 'transparent', color: '#6b7280', fontSize: 13, fontWeight: 600, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' },
   periodBtnActive: { border: 'none', background: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 600, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' },
   select: { fontSize: 13, fontWeight: 600, color: '#111827', background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, padding: '6px 10px' },
+  uploadBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#111827', background: '#fff', border: '1px solid #d1d5db', borderRadius: 9, padding: '9px 14px', cursor: 'pointer' },
   card: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: 20, marginTop: 0 },
   chartTitle: { fontSize: 15, fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center' },
   chartSub: { fontSize: 12, color: '#6b7280', marginTop: 4, marginBottom: 14 },

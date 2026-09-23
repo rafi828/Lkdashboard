@@ -1,6 +1,7 @@
 const { getPool } = require('../../../lib/db');
 const { parseSingleFile, requireRole } = require('../../../lib/api-helpers');
 const { parseClassificationFile } = require('../../../lib/xlsx-parser');
+const { recordFileUpload } = require('../../../lib/file-uploads');
 
 export const config = { api: { bodyParser: false } };
 
@@ -11,7 +12,7 @@ export default async function handler(req, res) {
   if (!user) return; // requireRole already sent the response
 
   try {
-    const { buffer } = await parseSingleFile(req);
+    const { buffer, filename } = await parseSingleFile(req);
     const records = parseClassificationFile(buffer);
     if (records.length === 0) {
       return res.status(400).json({ error: 'לא נמצאו שורות תקינות בקובץ הסיווג' });
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
       client.release();
     }
 
+    await recordFileUpload('classification', filename, user.id);
     return res.status(200).json({ ok: true, rows: records.length });
   } catch (err) {
     return res.status(400).json({ error: err.message || 'שגיאה בעיבוד הקובץ' });

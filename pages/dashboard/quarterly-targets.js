@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 
 const MONTH_LABELS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני'];
@@ -43,6 +44,7 @@ function deriveRow(r, quarter) {
 }
 
 export default function QuarterlyTargetsPage() {
+  const router = useRouter();
   const [rawRows, setRawRows] = useState([]);
   const [error, setError] = useState('');
   const [agent, setAgent] = useState('');
@@ -112,13 +114,16 @@ export default function QuarterlyTargetsPage() {
               : 'טרם הועלה קובץ יעדים רבעוניים'}
           </p>
         </div>
+        <button onClick={() => router.push('/dashboard/quarterly-targets-upload')} style={styles.uploadBtn}>
+          📤 טעינת קבצים
+        </button>
       </div>
 
       {error && <div style={styles.card}>{error}</div>}
 
       {rawRows.length === 0 && !error && (
         <div style={styles.card}>
-          עדיין אין נתונים. העלה קובץ יעדים רבעוניים דרך <b>מערכת ← טעינת קבצים</b>.
+          עדיין אין נתונים. לחץ על "📤 טעינת קבצים" למעלה כדי להעלות את קובץ היעדים הרבעוניים.
         </div>
       )}
 
@@ -515,6 +520,7 @@ const styles = {
   h1: { margin: 0, fontSize: 24, fontWeight: 700, color: '#111827' },
   subtext: { margin: '4px 0 0', fontSize: 13, color: '#6b7280' },
   card: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: 20 },
+  uploadBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#111827', background: '#fff', border: '1px solid #d1d5db', borderRadius: 9, padding: '9px 14px', cursor: 'pointer' },
   select: { fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', minWidth: 150 },
   periodToggle: { display: 'flex', gap: 4, background: '#f9fafb', border: '1px solid #e9e9ec', borderRadius: 8, padding: 3 },
   periodBtn: { border: 'none', background: 'transparent', color: '#6b7280', fontSize: 12, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' },
