@@ -68,6 +68,31 @@ export default function UsersPage() {
     load();
   }
 
+  async function handleResetPassword(u) {
+    const password = prompt(`סיסמה זמנית חדשה עבור ${u.name} (לפחות 6 תווים):`);
+    if (password === null) return;
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'שגיאה באיפוס הסיסמה');
+    alert(`הסיסמה של ${u.name} עודכנה. יש למסור לו את הסיסמה הזמנית.`);
+  }
+
+  async function handleResetTotp(u) {
+    if (!confirm(`לאפס את Google Authenticator של ${u.name}?\nבכניסה הבאה הוא יתבקש לסרוק קוד QR חדש.`)) return;
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_totp: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'שגיאה באיפוס Authenticator');
+    alert(`Google Authenticator של ${u.name} אופס.`);
+  }
+
   async function handleDelete(id) {
     if (!confirm('למחוק את המשתמש?')) return;
     await fetch(`/api/users/${id}`, { method: 'DELETE' });
@@ -143,7 +168,11 @@ export default function UsersPage() {
                   )}
                 </td>
                 <td style={styles.td}>
-                  <button onClick={() => handleDelete(u.id)} style={styles.deleteBtn}>מחק</button>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button onClick={() => handleResetPassword(u)} style={styles.resetBtn}>איפוס סיסמה</button>
+                    <button onClick={() => handleResetTotp(u)} style={styles.resetBtn}>איפוס Authenticator</button>
+                    <button onClick={() => handleDelete(u.id)} style={styles.deleteBtn}>מחק</button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -182,6 +211,7 @@ const styles = {
   smallSelect: { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' },
   smallInput: { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd', width: 70 },
   deleteBtn: { fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' },
+  resetBtn: { fontSize: 12, color: '#374151', background: 'transparent', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' },
   topicCheck: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#374151', cursor: 'pointer' },
   form: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
   input: { fontSize: 13, padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd' },
