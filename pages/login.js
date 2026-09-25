@@ -136,6 +136,8 @@ export default function LoginPage() {
         <button type="submit" disabled={loading} style={styles.button}>
           {loading ? 'מתחבר...' : 'התחבר'}
         </button>
+
+        <p style={styles.forgot}>שכחת סיסמה או החלפת טלפון? פנה למנהל המערכת לאיפוס.</p>
       </form>
     </div>
   );
@@ -163,6 +165,7 @@ const styles = {
   lcLogo: { height: 70, objectFit: 'contain' },
   roherLogo: { height: 34, objectFit: 'contain' },
   text: { fontSize: 13, color: '#555', lineHeight: 1.6, marginBottom: 12 },
+  forgot: { marginTop: 14, marginBottom: 0, fontSize: 12, color: '#6b7280', textAlign: 'center' },
   qr: { display: 'block', margin: '0 auto 16px', width: 200, height: 200 },
   label: { display: 'block', marginTop: 12, marginBottom: 4, fontSize: 14, color: '#333' },
   input: {
