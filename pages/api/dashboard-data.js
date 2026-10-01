@@ -1,12 +1,11 @@
 const { getPool } = require('../../lib/db');
-const { getUserFromRequest } = require('../../lib/auth');
+const { requireAdmin } = require('../../lib/access');
 const { getVisibleUserIds } = require('../../lib/permissions');
 
 export default async function handler(req, res) {
-  const currentUser = getUserFromRequest(req);
-  if (!currentUser) {
-    return res.status(401).json({ error: 'לא מחובר' });
-  }
+  // API ישן (טבלת sales לדוגמה, לא בשימוש פעיל) - נעול ל-Admin בלבד כדי שלא יהיה "דלת אחורית" לנתונים
+  const currentUser = await requireAdmin(req, res);
+  if (!currentUser) return;
 
   const visibleIds = await getVisibleUserIds(currentUser);
 

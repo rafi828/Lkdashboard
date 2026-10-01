@@ -5,7 +5,7 @@ import FileUploadGrid from '../../components/FileUploadGrid';
 export default function QuarterlyUploadPage() {
   const router = useRouter();
   return (
-    <Layout>
+    <Layout permission="quarterly.upload">
       <button onClick={() => router.push('/dashboard/quarterly-targets')} style={styles.backBtn}>
         → חזרה לדשבורד "יעדים רבעוניים ללקוח"
       </button>

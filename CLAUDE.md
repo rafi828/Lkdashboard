@@ -32,21 +32,30 @@
   Layout.js          - עטיפת עמוד: בודק התחברות (GET /api/me), מרנדר TopNav + תוכן
   TopNav.js           - סרגל ניווט עליון. גרסה נוכחית (לפי מה שאושר אחרון בצ'אט, יתכן לא חי עדיין):
                         שורה אחת: לוגו+שם חברה+התנתקות בצד שמאל, "תפריט"/"מערכת" בצד ימין.
-                        "תפריט" נטען דינמית מ-/api/topics (נושאים לפי הרשאת המשתמש).
-                        "מערכת" מכיל רק "ניהול משתמשים" (קבוע, לא תלוי הרשאות).
+                        "תפריט" - נושאים מ-/api/topics + דוחות מ-lib/reports.js, רק מה שיש למשתמש הרשאת צפייה בו.
+                        "מערכת" ("ניהול משתמשים") מוצג ל-Admin בלבד.
+  MeContext.js        - useMe() / can(me, key) / <IfCan permission="..."> - הסתרת כפתורים לפי הרשאה.
+                        Layout מקבל permission="targets.view" או adminOnly וחוסם עמוד שאין אליו הרשאה.
   FileUploadGrid.js   - קומפוננטת טעינת קבצים משותפת (dropzones + "הועלה לאחרונה"), בשימוש
                         בשני עמודי ה-upload הייעודיים (ראה pages/dashboard/*-upload.js).
 /db
-  schema.sql          - כל ה-CREATE TABLE. ראה "עקרון חשוב: ALTER TABLE" למטה.
+  schema.sql          - כל ה-CREATE TABLE. לשינויים ב-DB קיים ראה "שינוי סכימה = קובץ migration" למטה.
   seed.js             - סקריפט זריעת משתמש admin ראשוני (לא רץ אוטומטית ב-deploy).
+  migrate.js          - ⭐ רץ אוטומטית בכל `npm start` (לפני next start): מריץ קבצי migrations/*.sql שעוד לא רצו.
+  migrations/         - 001-permissions.sql, ... - כל קובץ רץ פעם אחת (נרשם בטבלת schema_migrations).
 /lib
   db.js               - getPool() - חיבור Postgres (SSL מותנה: כבוי לחיבור internal railway, דלוק לחיצוני).
   auth.js             - JWT + TOTP: getUserFromRequest, יצירת/אימות session.
-  permissions.js, agent-permissions.js - הרשאות היררכיות מבוססות agent_code (admin/manager/user).
+  reports.js          - ⭐ רשימת הדוחות המרכזית: נושא, שם, href, ומפתחות הרשאה (targets.view, quarterly.upload...).
+                        דוח חדש = מוסיפים כאן בלבד, והוא מופיע אוטומטית בתפריט ובמסך התבניות/חריגים.
+  access.js           - ⭐ requireUser / requirePermission(req,res,key) / requireAdmin / getDataScope(user).
+                        טוען את המשתמש וההרשאות טרי מה-DB בכל בקשה (לא סומך על role שב-cookie).
+  user-admin.js       - עזרים ל-API ניהול משתמשים (פרסור קודי סוכן, ולידציה).
+  permissions.js      - ישן, בשימוש רק ב-api/dashboard-data.js (legacy, Admin בלבד).
   calculations.js     - חישובי ימי עסקים (א'-ה', ללא חגים), פרו-רטה ליעדים MTD/YTD.
   xlsx-parser.js       - פרסור כל קבצי האקסל (ראה "פרסור קבצים" למטה).
-  api-helpers.js       - parseSingleFile(req) [מחזיר {buffer, fields, filename}], requireRole(req,res,roles).
-  topics.js            - getAllTopics, getVisibleTopics(user) - admin רואה הכל, אחרת לפי user_topic_access.
+  api-helpers.js       - parseSingleFile(req) [מחזיר {buffer, fields, filename}]. (בדיקות הרשאה -> lib/access.js)
+  topics.js            - getAllTopics, getVisibleTopics(user) - admin רואה הכל, אחרת נושאים שיש בהם דוח עם הרשאת צפייה.
   file-uploads.js       - recordFileUpload(fileKey, filename, userId) - שומר "הועלה לאחרונה" בטבלת file_uploads.
   mailer.js             - עטיפת nodemailer סביב SMTP. **לא עובד כרגע** - ראה "בעיה פתוחה: SMTP".
   quarterly-email-template.js - בונה HTML למייל סטטוס יעד רבעוני ללקוח (משמש את quarterly-targets-send.js).
@@ -57,7 +66,7 @@
                                 מפורטת (יעד/בפועל/הפרש/השלמה/רווח[placeholder]), בר בודד לכל סוכן
                                 (ירוק בהיר=יעד רקע, ירוק כהה=בפועל, פס שחור אם עברו יעד), תחום גדול
                                 בשורה נפרדת + "שאר התחומים" בשורה מאוחדת + "לא מסווג" בנפרד (dashed).
-    quarterly-targets.js     - דשבורד "יעדים רבעוניים ללקוח". Admin-only (ראה "הערת הרשאות" למטה).
+    quarterly-targets.js     - דשבורד "יעדים רבעוניים ללקוח". לפי הרשאה quarterly.view; סוכן רואה רק את הלקוחות שלו (ראה "הרשאות").
                                 פילטרים (סוכן/סטטוס/סוג יעד/חיפוש/רבעון 1-4+מצטבר), KPI, 3 גרפים
                                 (בר סוכנים, עוגת סטטוס, קו מגמה חודשית), טבלה ממוינת. כפתורי
                                 "ייצוא לשליחת מייל" (Word Mail Merge) ו"שליחת מייל" (ישיר, ראה SMTP).
@@ -68,7 +77,8 @@
     login.js, logout.js, me.js, totp/confirm.js
     topics.js                          - GET נושאים גלויים למשתמש הנוכחי.
     users/index.js, users/[id].js      - CRUD משתמשים.
-    users/[id]/topics.js               - GET/PUT הרשאות נושא למשתמש (admin only).
+    users/[id]/overrides.js            - PUT חריגים אישיים למשתמש (admin only).
+    permission-templates/index.js, [id].js - CRUD תבניות הרשאה (admin only; מחיקה חסומה אם יש משתמשים משויכים).
     upload/classification.js           - טעינת קובץ סיווג סוכנים לתחומים (מבוסס מיקום עמודה קבוע!).
     upload/targets.js                  - טעינת קובץ יעדים חודשיים (מבוסס כותרת "קוד סוכן" + שמות חודשים).
     upload/sales-matrix.js             - טעינת מטריצת מכירות חודשית (מבוסס כותרת "סוכן" + MM/YYYY).
@@ -76,7 +86,7 @@
     upload/status.js                   - GET "הועלה לאחרונה" לכל סוגי הקבצים (מ-file_uploads).
     dashboard/targets-summary.js       - נתוני "תקציב מול ביצוע" (מחושב, כולל diff/completion/contribution/profit[null]).
     dashboard/trends.js                - נתוני "מגמות".
-    dashboard/quarterly-targets.js     - GET נתוני יעדים רבעוניים (admin only).
+    dashboard/quarterly-targets.js     - GET נתוני יעדים רבעוניים (quarterly.view, מסונן לפי קוד סוכן).
     dashboard/quarterly-targets-export.js - POST ייצוא xlsx מותאם ל-Word Mail Merge (מקבל customerIds).
     dashboard/quarterly-targets-send.js   - POST שליחת מייל ישירה per-customer (SMTP - לא עובד עדיין).
 /public/logos
@@ -96,17 +106,21 @@
 
 ## סכימת בסיס הנתונים (עיקרי, לפי schema.sql)
 ```sql
-users (id, name, email, password_hash, role['admin'|'manager'|'user'], manager_id, agent_code, totp_secret, totp_enabled)
+users (id, name, email, password_hash, role['admin'|'manager'|'user'], manager_id, agent_code[ישן, לא בשימוש],
+       permission_template_id, totp_secret, totp_enabled)
+user_agent_codes (user_id, agent_code)                                    -- כמה קודי סוכן למשתמש
+permission_templates (id, name)  +  permission_template_items (template_id, permission_key)
+user_permission_overrides (user_id, permission_key, granted)              -- true=הוסף, false=הסר מעל התבנית
 sales (id, owner_id, customer, amount, sale_date)                         -- legacy, לא בשימוש פעיל
 agent_classification (agent_code PK, agent_name, domain)                  -- מ"סיווג סוכנים לתחומים"
 agent_targets (id, agent_code, agent_name, year, month, target_amount, UNIQUE(agent_code,year,month))
 agent_sales_monthly (id, agent_code, agent_name, year, month, sales_amount, UNIQUE(agent_code,year,month))
 
 topics (id, key, name, sort_order)                                        -- 'sales'/'procurement'/'warehouse'
-user_topic_access (user_id, topic_id)                                     -- הרשאות non-admin
+user_topic_access (user_id, topic_id)                                     -- ישן, כבר לא קובע גישה
 
 customer_quarterly_targets (
-  id, customer_id, customer_name, agent_name, agent_email, agent_phone,
+  id, customer_id, customer_name, agent_code[מ"קוד סוכן מלקוח - 2"], agent_name, agent_email, agent_phone,
   chanoch_email, rafi_email, david_email, amir_email,                     -- 4 עמודות מייל נוספות מהקובץ המקורי
   target_type, target_type_simple['רבעוני'|'שנתי'|'אחר / הערה'], year,
   q1_target, q1_actual, q1_credit,  q2_target, q2_actual, q2_credit,
@@ -118,12 +132,16 @@ customer_quarterly_targets (
 file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], filename, uploaded_at, uploaded_by)
 ```
 
-### ⚠️ עקרון קריטי: `CREATE TABLE IF NOT EXISTS` לא מוסיף עמודות לטבלה קיימת
-כל פעם שנוספה עמודה חדשה לטבלה שכבר קיימת ב-production (למשל `q1_credit` ל-`customer_quarterly_targets`,
-או `agent_email`/`chanoch_email` וכו'), חובה להריץ בנפרד `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`
-ב-Postgres (Railway → Postgres → Database → Data tab → תיבת Query). הרצה חוזרת של `schema.sql` המלא
-לא מוסיפה עמודות לטבלאות קיימות - זו הייתה מקור לכמה שעות דיבוג בעבר. Claude Code: כשמוסיפים עמודה
-לטבלה קיימת, תמיד להזכיר לרפי גם את פקודת ה-ALTER TABLE הנפרדת, לא להסתפק בעדכון schema.sql.
+### ⚠️ עקרון קריטי: שינוי סכימה = קובץ migration חדש (אוטומטי מאוקטובר 2026)
+`CREATE TABLE IF NOT EXISTS` לא מוסיף עמודות לטבלה קיימת, והרצה חוזרת של `schema.sql` לא מעדכנת DB קיים -
+זה היה מקור לשעות של דיבוג בעבר. **מעכשיו לא מריצים SQL ידני ב-Railway.** כל שינוי סכימה:
+1. קובץ חדש ב-`db/migrations/` עם המספר הבא: `002-<תיאור>.sql`, `003-...` (הסדר נקבע לפי שם הקובץ).
+2. רק פקודות בטוחות להרצה חוזרת: `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `ON CONFLICT DO NOTHING`.
+3. לעדכן גם את `schema.sql` (תיעוד המבנה המלא / התקנה חדשה).
+4. **לעולם לא לשנות קובץ migration שכבר רץ ב-production** - רק להוסיף קובץ חדש.
+
+`db/migrate.js` רץ בכל הפעלה (`npm start`), כל קובץ בטרנזקציה: אם קובץ נכשל - הוא מבוטל כולו, השגיאה
+מופיעה ב-Railway → Deploy Logs (`[migrate] ✗ ...`), והאפליקציה עולה בכל זאת. ריצה ידנית: `npm run migrate`.
 
 ---
 
@@ -138,18 +156,16 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 
 ---
 
-## הרשאות (permissions)
-- **מערכת ישנה (תקציב מול ביצוע):** לפי `agent_code` מספרי. Admin=הכל, Manager=עצמו+כפיפים
-  (רקורסיבי), User=רק agent_code שלו. הצלבה בין משתמש לסוכן דרך `users.agent_code`.
-- **מערכת חדשה (נושאים בתפריט):** טבלת `topics`+`user_topic_access`, ברמת נושא (לא דוח בודד).
-  Admin רואה הכל אוטומטית.
-
-**⚠️ פער ידוע:** דוח "יעדים רבעוניים ללקוח" מזהה סוכנים לפי שם טקסט חופשי (`agent_name`
-ב-`customer_quarterly_targets`), לא לפי `agent_code` מספרי. אין עדיין הצלבה בין השניים.
-כרגע הדוח admin-only (403 לכל תפקיד אחר) - זה limitation מכוון, לא רק חסר הרשאה זמני.
-אם רוצים לפתוח את זה ל-Manager/User, צריך קודם למפות שם→קוד.
-
----
+## הרשאות (permissions) - תבניות + חריגים (אוקטובר 2026)
+- **מה מותר (אילו דוחות/פעולות):** לכל משתמש תבנית הרשאה (`permission_templates`), ומעליה חריגים אישיים
+  (`user_permission_overrides`: הוסף/הסר). מפתחות ההרשאה מוגדרים ב-`lib/reports.js`:
+  `targets.view`, `targets.upload`, `quarterly.view`, `quarterly.upload`, `quarterly.email`. Admin = הכל אוטומטית.
+- **מה רואים בתוך הדוח (`getDataScope`):** Admin ומנהל מכירות (`manager`) = כל הנתונים. סוכן (`user`) = רק
+  קודי הסוכן שלו (`user_agent_codes`, יכולים להיות כמה). ב"תקציב מול ביצוע" לפי agent_code, וב"יעדים רבעוניים"
+  לפי `customer_quarterly_targets.agent_code` (עמודה "קוד סוכן מלקוח - 2" בקובץ). `manager_id` כבר לא משפיע על נתונים.
+- ייצוא/שליחת מייל - רק ללקוחות שהמשתמש רואה (נאכף בשרת).
+- אי אפשר לשמור סוכן בלי קוד סוכן (חסום גם בשרת וגם בהודעה קופצת). אי אפשר להוריד/למחוק את האדמין האחרון.
+- ההגנה האמיתית היא ב-API (`requirePermission`) - הסתרת כפתורים במסך היא רק נוחות.
 
 ## בעיה פתוחה: SMTP חסום ב-Railway
 נבדק ואומת: Railway חוסם חיבורי SMTP יוצאים (גם פורט 587 וגם 465, שניהם "Connection timeout" אחרי
@@ -182,7 +198,8 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 - Merge ל-`main` (דרך PR) → דיפלוי אוטומטי.
 - שינוי ב-`package.json` (תלות חדשה) → build מלא יותר (npm install מאפס), לוקח קצת יותר זמן.
 - שינוי במשתני סביבה → דיפלוי אוטומטי נפרד (לא דרך GitHub).
-- כל שינוי סכימה חדש בטבלה קיימת → חובה ALTER TABLE ידני בנוסף לעדכון schema.sql (ראה למעלה).
+- כל שינוי סכימה → קובץ חדש ב-`db/migrations/`, רץ אוטומטית בדיפלוי (ראה "שינוי סכימה = קובץ migration").
+  לבדוק ב-Deploy Logs שמופיע `[migrate] ✓`.
 
 משתני סביבה קיימים: `DATABASE_URL` (auto מ-Railway), `JWT_SECRET`, `JWT_EXPIRES_IN=7d`,
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `PUBLIC_APP_URL`.
@@ -191,7 +208,10 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 
 ## עוד לעשות / פתוח
 - לעבור מ-SMTP ל-Resend לשליחת מייל אמיתית (`lib/mailer.js`).
-- דוח "יעדים רבעוניים ללקוח" - אם רוצים הרשאות עדינות יותר מ-admin-only, למפות agent_name→agent_code.
+- ~~דוח "יעדים רבעוניים ללקוח" - הרשאות מעבר ל-admin-only~~ - ✅ בוצע (תבניות + חריגים, קוד סוכן מהקובץ).
+- ~~עדכון DB אוטומטי בעלייה (migrations)~~ - ✅ בוצע (`db/migrate.js`, רץ ב-`npm start`).
+- אופציה עתידית: מנהל מכירות שרואה רק את הסוכנים שמתחתיו (במקום הכל) - אם יידרש.
+- ניקוי: `users.agent_code`, `user_topic_access` - כבר לא בשימוש, למחוק רק באישור רפי אחרי שהמעבר יציב.
 - `pages/dashboard/trends.js` - לבדוק אם עדיין רלוונטי / איך מקושר בתפריט.
 - ~~לוודא ש-`pages/upload.js` הישן באמת הוסר מה-repo~~ - ✅ אומת.
 - לבדוק ולנקות את הקבצים הלא-מתועדים (ראה "קבצים שקיימים ב-repo ולא מתועדים" למעלה) - רק באישור רפי.

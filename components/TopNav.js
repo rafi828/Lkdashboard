@@ -1,26 +1,19 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useMe, can } from './MeContext';
+import { REPORTS, viewPermissionOf } from '../lib/reports';
 
-// כל דוח קיים/עתידי משויך כאן ל-topic key שלו. topics שהמשתמש לא רואה (מ-/api/topics) לא יופיעו בתפריט "תפריט".
-// שים לב: "טעינת קבצים" תמיד אמור להישאר אחרון במערך - דוחות חדשים שיתווספו לנושא "מכירות" ייכנסו מעליו, לא מתחתיו.
-const REPORTS_BY_TOPIC = {
-  sales: [
-    { href: '/dashboard/targets', name: 'תקציב מול ביצוע', desc: 'יעדים מול בפועל, לפי תחום ולפי סוכן', available: true },
-    { href: '/dashboard/quarterly-targets', name: 'יעדים רבעוניים ללקוח', desc: 'מעקב יעדי רבעון לפי לקוח (זמין ל-Admin)', available: true },
-  ],
-  procurement: [{ href: null, name: 'דוחות רכש', desc: 'ייבנה בהמשך', available: false }],
-  warehouse: [{ href: null, name: 'דוחות מחסן', desc: 'ייבנה בהמשך', available: false }],
-};
-
+// הדוחות מגיעים מהרשימה המרכזית (lib/reports.js). דוח שאין למשתמש הרשאת צפייה בו לא יופיע בתפריט.
 const SYSTEM_ITEMS = [
-  { href: '/users', name: 'ניהול משתמשים', desc: 'משתמשים, תפקידים, הרשאות לפי נושא' },
+  { href: '/users', name: 'ניהול משתמשים', desc: 'משתמשים, תבניות הרשאה וחריגים' },
 ];
 
 export default function TopNav() {
   const [topics, setTopics] = useState([]);
   const [openMenu, setOpenMenu] = useState(null); // 'menu' | 'system' | null
   const router = useRouter();
+  const me = useMe();
 
   useEffect(() => {
     fetch('/api/topics')
@@ -45,14 +38,14 @@ export default function TopNav() {
           {openMenu === 'menu' && (
             <div style={styles.menuLvl1}>
               {topics.map((t) => (
-                <TopicItem key={t.key} topic={t} onNavigate={() => setOpenMenu(null)} />
+                <TopicItem key={t.key} topic={t} me={me} onNavigate={() => setOpenMenu(null)} />
               ))}
               {topics.length === 0 && <div style={styles.emptyNote}>אין לך גישה לנושאים כרגע</div>}
             </div>
           )}
         </div>
 
-        <div style={styles.menuRoot}>
+        {me?.role === 'admin' && <div style={styles.menuRoot}>
           <button onClick={() => toggle('system')} style={styles.menuBtn}>מערכת ▾</button>
           {openMenu === 'system' && (
             <div style={{ ...styles.menuLvl1, minWidth: 230 }}>
@@ -64,7 +57,7 @@ export default function TopNav() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       <div style={styles.leftGroup}>
@@ -78,9 +71,12 @@ export default function TopNav() {
   );
 }
 
-function TopicItem({ topic, onNavigate }) {
+function TopicItem({ topic, me, onNavigate }) {
   const [hover, setHover] = useState(false);
-  const reports = REPORTS_BY_TOPIC[topic.key] || [];
+  // Admin רואה גם דוחות "בקרוב"; משתמש אחר רואה רק דוחות שיש לו הרשאת צפייה בהם
+  const reports = REPORTS.filter((r) => r.topic === topic.key)
+    .map((r) => ({ ...r, available: !!r.href }))
+    .filter((r) => (r.available ? can(me, viewPermissionOf(r)) : me?.role === 'admin'));
 
   return (
     <div style={styles.topicItem} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
@@ -91,14 +87,14 @@ function TopicItem({ topic, onNavigate }) {
         <div style={styles.menuLvl2}>
           {reports.map((r) => (
             r.available ? (
-              <Link key={r.name} href={r.href} style={styles.ddItem} onClick={onNavigate}>
+              <Link key={r.key} href={r.href} style={styles.ddItem} onClick={onNavigate}>
                 <div style={styles.ddName}>
                   {r.name} <span style={styles.activeChip}>זמין</span>
                 </div>
                 <div style={styles.ddDesc}>{r.desc}</div>
               </Link>
             ) : (
-              <div key={r.name} style={{ ...styles.ddItem, ...styles.ddDisabled }}>
+              <div key={r.key} style={{ ...styles.ddItem, ...styles.ddDisabled }}>
                 <div style={styles.ddName}>
                   {r.name} <span style={styles.soonChip}>בקרוב</span>
                 </div>

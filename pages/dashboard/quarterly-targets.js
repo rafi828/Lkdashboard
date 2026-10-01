@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import Layout from '../../components/Layout';
+import Layout, { IfCan } from '../../components/Layout';
 
 const MONTH_LABELS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני'];
 const STATUS_COLORS = { above: '#16a34a', warn: '#d97706', below: '#dc2626' };
@@ -58,11 +58,16 @@ export default function QuarterlyTargetsPage() {
   const [recipientField, setRecipientField] = useState('agent_email');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+  const [noAgentCode, setNoAgentCode] = useState(false);
 
   useEffect(() => {
     fetch('/api/dashboard/quarterly-targets')
       .then((res) => res.json())
-      .then((d) => (d.error ? setError(d.error) : setRawRows(d.rows)));
+      .then((d) => {
+        if (d.error) return setError(d.error);
+        setRawRows(d.rows);
+        setNoAgentCode(!!d.noAgentCode);
+      });
   }, []);
 
   const agentOptions = useMemo(() => [...new Set(rawRows.map((r) => r.agent_name))].sort(), [rawRows]);
@@ -104,7 +109,7 @@ export default function QuarterlyTargetsPage() {
   const belowCount = rows.filter((r) => r.status === 'below').length;
 
   return (
-    <Layout>
+    <Layout permission="quarterly.view">
       <div style={styles.headerRow}>
         <div>
           <h1 style={styles.h1}>יעדים רבעוניים ללקוח</h1>
@@ -114,16 +119,20 @@ export default function QuarterlyTargetsPage() {
               : 'טרם הועלה קובץ יעדים רבעוניים'}
           </p>
         </div>
-        <button onClick={() => router.push('/dashboard/quarterly-targets-upload')} style={styles.uploadBtn}>
-          📤 טעינת קבצים
-        </button>
+        <IfCan permission="quarterly.upload">
+          <button onClick={() => router.push('/dashboard/quarterly-targets-upload')} style={styles.uploadBtn}>
+            📤 טעינת קבצים
+          </button>
+        </IfCan>
       </div>
 
       {error && <div style={styles.card}>{error}</div>}
 
-      {rawRows.length === 0 && !error && (
+      {noAgentCode && <div style={styles.card}>לא הוגדר לך קוד סוכן, ולכן אין נתונים להצגה. פנה למנהל המערכת.</div>}
+
+      {rawRows.length === 0 && !error && !noAgentCode && (
         <div style={styles.card}>
-          עדיין אין נתונים. לחץ על "📤 טעינת קבצים" למעלה כדי להעלות את קובץ היעדים הרבעוניים.
+          אין עדיין נתונים להצגה בדוח הזה.
         </div>
       )}
 
@@ -166,8 +175,10 @@ export default function QuarterlyTargetsPage() {
               </div>
             </FilterField>
             <button onClick={resetFilters} style={styles.resetBtn}>איפוס סינונים</button>
-            <button onClick={() => handleExport(sortedRows.map((r) => r.customer_id))} style={styles.exportBtn}>ייצוא לשליחת מייל (Word Mail Merge)</button>
-            <button onClick={() => openSendModalGuard(quarter, setSendModalOpen)} style={styles.sendBtn}>שליחת מייל</button>
+            <IfCan permission="quarterly.email">
+              <button onClick={() => handleExport(sortedRows.map((r) => r.customer_id))} style={styles.exportBtn}>ייצוא לשליחת מייל (Word Mail Merge)</button>
+              <button onClick={() => openSendModalGuard(quarter, setSendModalOpen)} style={styles.sendBtn}>שליחת מייל</button>
+            </IfCan>
           </div>
 
           {/* KPI */}

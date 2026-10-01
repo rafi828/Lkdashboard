@@ -1,5 +1,6 @@
 const { getPool } = require('../../../lib/db');
-const { parseSingleFile, requireRole } = require('../../../lib/api-helpers');
+const { parseSingleFile } = require('../../../lib/api-helpers');
+const { requirePermission } = require('../../../lib/access');
 const { parseTargetsFile } = require('../../../lib/xlsx-parser');
 const { recordFileUpload } = require('../../../lib/file-uploads');
 
@@ -8,7 +9,7 @@ export const config = { api: { bodyParser: false } };
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = requireRole(req, res, ['admin']);
+  const user = await requirePermission(req, res, 'targets.upload');
   if (!user) return;
 
   try {
