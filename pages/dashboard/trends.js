@@ -24,7 +24,7 @@ export default function TrendsPage() {
   const points = data ? buildPoints(data.months) : null;
 
   return (
-    <Layout>
+    <Layout permission="targets.view">
       <div style={styles.headerRow}>
         <div>
           <h1 style={styles.h1}>מגמות והיסטוריה</h1>

@@ -1,5 +1,6 @@
 const { getPool } = require('../../../lib/db');
-const { parseSingleFile, requireRole } = require('../../../lib/api-helpers');
+const { parseSingleFile } = require('../../../lib/api-helpers');
+const { requirePermission } = require('../../../lib/access');
 const { parseQuarterlyTargetsFile } = require('../../../lib/xlsx-parser');
 const { recordFileUpload } = require('../../../lib/file-uploads');
 
@@ -8,7 +9,7 @@ export const config = { api: { bodyParser: false } };
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = requireRole(req, res, ['admin']);
+  const user = await requirePermission(req, res, 'quarterly.upload');
   if (!user) return;
 
   try {
@@ -28,15 +29,15 @@ export default async function handler(req, res) {
       for (const r of records) {
         await client.query(
           `INSERT INTO customer_quarterly_targets
-            (customer_id, customer_name, agent_name, agent_email, agent_phone,
+            (customer_id, customer_name, agent_code, agent_name, agent_email, agent_phone,
              chanoch_email, rafi_email, david_email, amir_email,
              target_type, target_type_simple, year,
              q1_target, q1_actual, q1_credit, q2_target, q2_actual, q2_credit,
              q3_target, q3_actual, q3_credit, q4_target, q4_actual, q4_credit,
              annual_target, last_year_sales, m1, m2, m3, m4, m5, m6)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
            ON CONFLICT (customer_id, year) DO UPDATE SET
-             customer_name = EXCLUDED.customer_name, agent_name = EXCLUDED.agent_name,
+             customer_name = EXCLUDED.customer_name, agent_code = EXCLUDED.agent_code, agent_name = EXCLUDED.agent_name,
              agent_email = EXCLUDED.agent_email, agent_phone = EXCLUDED.agent_phone,
              chanoch_email = EXCLUDED.chanoch_email, rafi_email = EXCLUDED.rafi_email,
              david_email = EXCLUDED.david_email, amir_email = EXCLUDED.amir_email,
@@ -49,7 +50,7 @@ export default async function handler(req, res) {
              annual_target = EXCLUDED.annual_target, last_year_sales = EXCLUDED.last_year_sales,
              m1 = EXCLUDED.m1, m2 = EXCLUDED.m2, m3 = EXCLUDED.m3, m4 = EXCLUDED.m4, m5 = EXCLUDED.m5, m6 = EXCLUDED.m6`,
           [
-            r.customer_id, r.customer_name, r.agent_name, r.agent_email, r.agent_phone,
+            r.customer_id, r.customer_name, r.agent_code, r.agent_name, r.agent_email, r.agent_phone,
             r.chanoch_email, r.rafi_email, r.david_email, r.amir_email,
             r.target_type, r.target_type_simple, r.year,
             r.q1_target, r.q1_actual, r.q1_credit, r.q2_target, r.q2_actual, r.q2_credit,

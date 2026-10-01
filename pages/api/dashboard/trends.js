@@ -1,17 +1,16 @@
 const { getPool } = require('../../../lib/db');
-const { getUserFromRequest } = require('../../../lib/auth');
-const { getVisibleAgentCodes } = require('../../../lib/agent-permissions');
+const { requirePermission, getDataScope } = require('../../../lib/access');
 
 export default async function handler(req, res) {
-  const currentUser = getUserFromRequest(req);
-  if (!currentUser) return res.status(401).json({ error: 'לא מחובר' });
+  const currentUser = await requirePermission(req, res, 'targets.view');
+  if (!currentUser) return;
 
   const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
   const domainFilter = req.query.domain || null; // אופציונלי: לצייר מגמה לתחום אחד בלבד
   const agentFilter = req.query.agent_code ? parseInt(req.query.agent_code, 10) : null;
 
   const pool = getPool();
-  const visibility = await getVisibleAgentCodes(currentUser);
+  const visibility = getDataScope(currentUser);
 
   let classRows;
   if (visibility.all) {

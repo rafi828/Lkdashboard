@@ -1,30 +1,30 @@
 const { getPool } = require('../../../lib/db');
-const { getUserFromRequest } = require('../../../lib/auth');
+const { requirePermission, getDataScope } = require('../../../lib/access');
 
 export default async function handler(req, res) {
-  const currentUser = getUserFromRequest(req);
-  if (!currentUser) return res.status(401).json({ error: 'לא מחובר' });
-
-  // הערה: הדוח הזה מזוהה לפי agent_name (טקסט חופשי מהקובץ), לא agent_code המספרי
-  // שמשמש להרשאות בשאר המערכת - אז בשלב זה הוא זמין רק ל-Admin.
-  if (currentUser.role !== 'admin') {
-    return res.status(403).json({ error: 'דוח זה זמין כרגע רק למנהל מערכת' });
-  }
+  const currentUser = await requirePermission(req, res, 'quarterly.view');
+  if (!currentUser) return;
 
   const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
 
+  // סוכן רואה רק לקוחות שקוד הסוכן שלהם (עמודה "קוד סוכן מלקוח - 2" בקובץ) הוא אחד מהקודים שלו
+  const scope = getDataScope(currentUser);
+  if (!scope.all && scope.codes.length === 0) {
+    return res.status(200).json({ year, rows: [], noAgentCode: true });
+  }
+
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT customer_id, customer_name, agent_name, agent_email, agent_phone,
+    `SELECT customer_id, customer_name, agent_code, agent_name, agent_email, agent_phone,
             chanoch_email, rafi_email, david_email, amir_email,
             target_type, target_type_simple,
             q1_target, q1_actual, q1_credit, q2_target, q2_actual, q2_credit,
             q3_target, q3_actual, q3_credit, q4_target, q4_actual, q4_credit,
             annual_target, last_year_sales, m1, m2, m3, m4, m5, m6
      FROM customer_quarterly_targets
-     WHERE year = $1
+     WHERE year = $1 AND ($2::int[] IS NULL OR agent_code = ANY($2::int[]))
      ORDER BY customer_name`,
-    [year]
+    [year, scope.all ? null : scope.codes]
   );
 
   const data = rows.map((r) => ({
@@ -37,5 +37,5 @@ export default async function handler(req, res) {
     m1: Number(r.m1), m2: Number(r.m2), m3: Number(r.m3), m4: Number(r.m4), m5: Number(r.m5), m6: Number(r.m6),
   }));
 
-  return res.status(200).json({ year, rows: data });
+  return res.status(200).json({ year, rows: data, canEmail: currentUser.permissions.has('quarterly.email') });
 }

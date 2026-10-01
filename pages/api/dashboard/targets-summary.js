@@ -1,13 +1,12 @@
 const { getPool } = require('../../../lib/db');
-const { getUserFromRequest } = require('../../../lib/auth');
-const { getVisibleAgentCodes } = require('../../../lib/agent-permissions');
+const { requirePermission, getDataScope } = require('../../../lib/access');
 const { getPeriodDefinition, computeAgentTotals } = require('../../../lib/calculations');
 
 const DOMAIN_ORDER = ['מכירות סיטונאים', 'סניפי ל.כ', 'מוסדיים', 'משווקים', 'משרד הביטחון'];
 
 export default async function handler(req, res) {
-  const currentUser = getUserFromRequest(req);
-  if (!currentUser) return res.status(401).json({ error: 'לא מחובר' });
+  const currentUser = await requirePermission(req, res, 'targets.view');
+  if (!currentUser) return;
 
   const period = req.query.period === 'ytd' ? 'ytd' : 'mtd';
   const now = new Date();
@@ -15,7 +14,7 @@ export default async function handler(req, res) {
   const month = req.query.month ? parseInt(req.query.month, 10) : now.getMonth() + 1;
 
   const pool = getPool();
-  const visibility = await getVisibleAgentCodes(currentUser);
+  const visibility = getDataScope(currentUser);
 
   // כל הסוכנים המסווגים (מסוננים לפי הרשאה)
   let classRows;
@@ -114,6 +113,7 @@ export default async function handler(req, res) {
     year,
     month,
     currentUser: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
+    noAgentCode: !visibility.all && visibility.codes.length === 0,
     grandTotal: grandTotalWithDerived,
     domains: domainListWithDerived,
   });

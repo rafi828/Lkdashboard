@@ -1,15 +1,19 @@
 const { getPool } = require('../../../lib/db');
-const { getUserFromRequest } = require('../../../lib/auth');
+const { requirePermission, getDataScope } = require('../../../lib/access');
 const { sendMail } = require('../../../lib/mailer');
 const { buildQuarterEmailHtml } = require('../../../lib/quarterly-email-template');
 
 const RECIPIENT_FIELDS = ['agent_email', 'rafi_email', 'chanoch_email', 'david_email', 'amir_email'];
 
 export default async function handler(req, res) {
-  const currentUser = getUserFromRequest(req);
-  if (!currentUser) return res.status(401).json({ error: 'לא מחובר' });
-  if (currentUser.role !== 'admin') return res.status(403).json({ error: 'זמין כרגע רק למנהל מערכת' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const currentUser = await requirePermission(req, res, 'quarterly.email');
+  if (!currentUser) return;
+  // ייצוא/שליחה רק ללקוחות שהמשתמש רואה בדוח (סוכן -> רק הלקוחות שלו)
+  const scope = getDataScope(currentUser);
+  if (!scope.all && scope.codes.length === 0) {
+    return res.status(403).json({ error: 'לא הוגדר לך קוד סוכן - פנה למנהל המערכת' });
+  }
 
   const { customerIds, quarter, recipientField, year } = req.body || {};
 
@@ -35,8 +39,9 @@ export default async function handler(req, res) {
             q1_target, q1_actual, q1_credit, q2_target, q2_actual, q2_credit,
             q3_target, q3_actual, q3_credit, q4_target, q4_actual, q4_credit
      FROM customer_quarterly_targets
-     WHERE year = $1 AND customer_id = ANY($2::bigint[])`,
-    [y, customerIds]
+     WHERE year = $1 AND customer_id = ANY($2::bigint[])
+       AND ($3::int[] IS NULL OR agent_code = ANY($3::int[]))`,
+    [y, customerIds, scope.all ? null : scope.codes]
   );
 
   let sent = 0;

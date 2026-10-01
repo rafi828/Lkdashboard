@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import Layout from '../../components/Layout';
+import Layout, { IfCan } from '../../components/Layout';
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -49,16 +49,18 @@ export default function TargetsDashboard() {
   }, [period, year, month]);
 
   return (
-    <Layout>
+    <Layout permission="targets.view">
       <div style={styles.headerRow}>
         <div>
           <h1 style={styles.h1}>תקציב מול ביצוע</h1>
           <p style={styles.subtext}>ביצוע בפועל מול יעד, לפי תחום ולפי סוכן</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/dashboard/targets-upload')} style={styles.uploadBtn}>
-            📤 טעינת קבצים
-          </button>
+          <IfCan permission="targets.upload">
+            <button onClick={() => router.push('/dashboard/targets-upload')} style={styles.uploadBtn}>
+              📤 טעינת קבצים
+            </button>
+          </IfCan>
           <div style={styles.periodToggle}>
             <button onClick={() => setPeriod('mtd')} style={period === 'mtd' ? styles.periodBtnActive : styles.periodBtn}>
               MTD - מתחילת החודש
@@ -78,6 +80,7 @@ export default function TargetsDashboard() {
       </div>
 
       {error && <div style={styles.card}>{error}</div>}
+      {data?.noAgentCode && <div style={styles.card}>לא הוגדר לך קוד סוכן, ולכן אין נתונים להצגה. פנה למנהל המערכת.</div>}
       {!data && !error && <div style={styles.card}>טוען...</div>}
 
       {data && (

@@ -1,12 +1,16 @@
 const { getPool } = require('../../../lib/db');
-const { getUserFromRequest } = require('../../../lib/auth');
+const { requirePermission, getDataScope } = require('../../../lib/access');
 const XLSX = require('xlsx');
 
 export default async function handler(req, res) {
-  const currentUser = getUserFromRequest(req);
-  if (!currentUser) return res.status(401).json({ error: 'לא מחובר' });
-  if (currentUser.role !== 'admin') return res.status(403).json({ error: 'זמין כרגע רק למנהל מערכת' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const currentUser = await requirePermission(req, res, 'quarterly.email');
+  if (!currentUser) return;
+  // ייצוא/שליחה רק ללקוחות שהמשתמש רואה בדוח (סוכן -> רק הלקוחות שלו)
+  const scope = getDataScope(currentUser);
+  if (!scope.all && scope.codes.length === 0) {
+    return res.status(403).json({ error: 'לא הוגדר לך קוד סוכן - פנה למנהל המערכת' });
+  }
 
   const { customerIds, year } = req.body || {};
   if (!Array.isArray(customerIds) || customerIds.length === 0) {
@@ -23,8 +27,9 @@ export default async function handler(req, res) {
             annual_target, last_year_sales
      FROM customer_quarterly_targets
      WHERE year = $1 AND customer_id = ANY($2::bigint[])
+       AND ($3::int[] IS NULL OR agent_code = ANY($3::int[]))
      ORDER BY customer_name`,
-    [y, customerIds]
+    [y, customerIds, scope.all ? null : scope.codes]
   );
 
   // שמות העמודות כאן זהים לכותרות שבקובץ המקור ("עיבוד התקדמות לקוחות יעדים") -

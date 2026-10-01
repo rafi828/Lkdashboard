@@ -5,7 +5,7 @@ import FileUploadGrid from '../../components/FileUploadGrid';
 export default function TargetsUploadPage() {
   const router = useRouter();
   return (
-    <Layout>
+    <Layout permission="targets.upload">
       <button onClick={() => router.push('/dashboard/targets')} style={styles.backBtn}>
         → חזרה לדשבורד "תקציב מול ביצוע"
       </button>
