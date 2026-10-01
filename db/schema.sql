@@ -133,7 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_cqt_agent_code ON customer_quarterly_targets(agen
 -- ==========================================================
 -- הרשאות: תבנית הרשאה + חריגים אישיים (רשימת הדוחות ומפתחות ההרשאה: lib/reports.js)
 -- Admin מקבל הכל אוטומטית. טבלאות topics/user_topic_access הישנות כבר לא קובעות גישה.
--- ⚠️ ב-DB קיים: להריץ את db/migrations/2026-10-permissions.sql (כולל ALTER TABLE והעברת נתונים).
+-- ⚠️ ב-DB קיים: להריץ את db/migrations/001-permissions.sql - רץ אוטומטית בעליית האפליקציה (db/migrate.js).
 -- ==========================================================
 CREATE TABLE IF NOT EXISTS permission_templates (
   id          SERIAL PRIMARY KEY,

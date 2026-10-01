@@ -39,8 +39,10 @@
   FileUploadGrid.js   - קומפוננטת טעינת קבצים משותפת (dropzones + "הועלה לאחרונה"), בשימוש
                         בשני עמודי ה-upload הייעודיים (ראה pages/dashboard/*-upload.js).
 /db
-  schema.sql          - כל ה-CREATE TABLE. ראה "עקרון חשוב: ALTER TABLE" למטה.
+  schema.sql          - כל ה-CREATE TABLE. לשינויים ב-DB קיים ראה "שינוי סכימה = קובץ migration" למטה.
   seed.js             - סקריפט זריעת משתמש admin ראשוני (לא רץ אוטומטית ב-deploy).
+  migrate.js          - ⭐ רץ אוטומטית בכל `npm start` (לפני next start): מריץ קבצי migrations/*.sql שעוד לא רצו.
+  migrations/         - 001-permissions.sql, ... - כל קובץ רץ פעם אחת (נרשם בטבלת schema_migrations).
 /lib
   db.js               - getPool() - חיבור Postgres (SSL מותנה: כבוי לחיבור internal railway, דלוק לחיצוני).
   auth.js             - JWT + TOTP: getUserFromRequest, יצירת/אימות session.
@@ -130,12 +132,16 @@ customer_quarterly_targets (
 file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], filename, uploaded_at, uploaded_by)
 ```
 
-### ⚠️ עקרון קריטי: `CREATE TABLE IF NOT EXISTS` לא מוסיף עמודות לטבלה קיימת
-כל פעם שנוספה עמודה חדשה לטבלה שכבר קיימת ב-production (למשל `q1_credit` ל-`customer_quarterly_targets`,
-או `agent_email`/`chanoch_email` וכו'), חובה להריץ בנפרד `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`
-ב-Postgres (Railway → Postgres → Database → Data tab → תיבת Query). הרצה חוזרת של `schema.sql` המלא
-לא מוסיפה עמודות לטבלאות קיימות - זו הייתה מקור לכמה שעות דיבוג בעבר. Claude Code: כשמוסיפים עמודה
-לטבלה קיימת, תמיד להזכיר לרפי גם את פקודת ה-ALTER TABLE הנפרדת, לא להסתפק בעדכון schema.sql.
+### ⚠️ עקרון קריטי: שינוי סכימה = קובץ migration חדש (אוטומטי מאוקטובר 2026)
+`CREATE TABLE IF NOT EXISTS` לא מוסיף עמודות לטבלה קיימת, והרצה חוזרת של `schema.sql` לא מעדכנת DB קיים -
+זה היה מקור לשעות של דיבוג בעבר. **מעכשיו לא מריצים SQL ידני ב-Railway.** כל שינוי סכימה:
+1. קובץ חדש ב-`db/migrations/` עם המספר הבא: `002-<תיאור>.sql`, `003-...` (הסדר נקבע לפי שם הקובץ).
+2. רק פקודות בטוחות להרצה חוזרת: `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `ON CONFLICT DO NOTHING`.
+3. לעדכן גם את `schema.sql` (תיעוד המבנה המלא / התקנה חדשה).
+4. **לעולם לא לשנות קובץ migration שכבר רץ ב-production** - רק להוסיף קובץ חדש.
+
+`db/migrate.js` רץ בכל הפעלה (`npm start`), כל קובץ בטרנזקציה: אם קובץ נכשל - הוא מבוטל כולו, השגיאה
+מופיעה ב-Railway → Deploy Logs (`[migrate] ✗ ...`), והאפליקציה עולה בכל זאת. ריצה ידנית: `npm run migrate`.
 
 ---
 
@@ -192,7 +198,8 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 - Merge ל-`main` (דרך PR) → דיפלוי אוטומטי.
 - שינוי ב-`package.json` (תלות חדשה) → build מלא יותר (npm install מאפס), לוקח קצת יותר זמן.
 - שינוי במשתני סביבה → דיפלוי אוטומטי נפרד (לא דרך GitHub).
-- כל שינוי סכימה חדש בטבלה קיימת → חובה ALTER TABLE ידני בנוסף לעדכון schema.sql (ראה למעלה).
+- כל שינוי סכימה → קובץ חדש ב-`db/migrations/`, רץ אוטומטית בדיפלוי (ראה "שינוי סכימה = קובץ migration").
+  לבדוק ב-Deploy Logs שמופיע `[migrate] ✓`.
 
 משתני סביבה קיימים: `DATABASE_URL` (auto מ-Railway), `JWT_SECRET`, `JWT_EXPIRES_IN=7d`,
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `PUBLIC_APP_URL`.
@@ -202,8 +209,7 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 ## עוד לעשות / פתוח
 - לעבור מ-SMTP ל-Resend לשליחת מייל אמיתית (`lib/mailer.js`).
 - ~~דוח "יעדים רבעוניים ללקוח" - הרשאות מעבר ל-admin-only~~ - ✅ בוצע (תבניות + חריגים, קוד סוכן מהקובץ).
-- **עדכון DB אוטומטי בעלייה (migrations):** במקום להריץ SQL ידני ב-Railway, שהאפליקציה תריץ בעצמה את קבצי
-  `db/migrations/*.sql` שעוד לא רצו (טבלת מעקב `schema_migrations`). רפי ביקש לרשום כמשימה להמשך.
+- ~~עדכון DB אוטומטי בעלייה (migrations)~~ - ✅ בוצע (`db/migrate.js`, רץ ב-`npm start`).
 - אופציה עתידית: מנהל מכירות שרואה רק את הסוכנים שמתחתיו (במקום הכל) - אם יידרש.
 - ניקוי: `users.agent_code`, `user_topic_access` - כבר לא בשימוש, למחוק רק באישור רפי אחרי שהמעבר יציב.
 - `pages/dashboard/trends.js` - לבדוק אם עדיין רלוונטי / איך מקושר בתפריט.

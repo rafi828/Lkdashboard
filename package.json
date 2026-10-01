@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "seed": "node db/seed.js"
+    "start": "node db/migrate.js && next start",
+    "seed": "node db/seed.js",
+    "migrate": "node db/migrate.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
