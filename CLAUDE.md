@@ -60,7 +60,11 @@
   mailer.js             - עטיפת nodemailer סביב SMTP. **לא עובד כרגע** - ראה "בעיה פתוחה: SMTP".
   quarterly-email-template.js - בונה HTML למייל סטטוס יעד רבעוני ללקוח (משמש את quarterly-targets-send.js).
 /pages
-  login.js, upload.js(הוסר, ראה למטה), users.js, dashboard.js(legacy, לא בשימוש)
+  login.js            - התחברות: אימייל+סיסמה -> קוד Google Authenticator. בכניסה ראשונה: QR + הסבר שלב-אחר-שלב.
+                        השם באפליקציה ("דשבורד ל.כ") מוגדר ב-ISSUER ב-lib/totp.js (משפיע רק על סריקות חדשות).
+  home.js             - דף הפתיחה אחרי התחברות: מעביר לדוח הראשון שיש למשתמש הרשאה אליו (סדר lib/reports.js),
+                        ואם אין לו אף דוח - מציג הודעה "פנה למנהל המערכת". גם / ו-/dashboard מפנים לכאן.
+  upload.js(הוסר, ראה למטה), users.js, dashboard.js(legacy, מפנה ל-/home)
   /dashboard
     targets.js               - דשבורד "תקציב מול ביצוע" הראשי. MTD/YTD, עוגת פילוח תחומים+טבלה
                                 מפורטת (יעד/בפועל/הפרש/השלמה/רווח[placeholder]), בר בודד לכל סוכן
