@@ -54,7 +54,7 @@ export default function LoginPage() {
         setError(data.error || 'קוד שגוי');
         return;
       }
-      router.push('/dashboard/targets');
+      router.push('/home');
     } finally {
       setLoading(false);
     }
@@ -68,17 +68,39 @@ export default function LoginPage() {
             <img src="/logos/lc-logo.png" alt="ל.כ כלי עבודה וציוד" style={styles.lcLogo} />
             <img src="/logos/roher-logo.png" alt="ROHER Tools" style={styles.roherLogo} />
           </div>
-          <h1 style={styles.title}>אימות דו-שלבי</h1>
-
           {step === 'setup' ? (
             <>
+              <h1 style={styles.title}>ברוך הבא! הגדרת כניסה מאובטחת</h1>
               <p style={styles.text}>
-                כניסה ראשונה - סרוק את הקוד עם אפליקציית <b>Google Authenticator</b> (או כל אפליקציית TOTP אחרת), ואז הקלד את הקוד בן 6 הספרות שמופיע בה.
+                זו הכניסה הראשונה שלך. כדי להגן על המידע, בכל כניסה תצטרך גם קוד מהטלפון.
+                ההגדרה לוקחת כ-2 דקות ונעשית פעם אחת בלבד.
               </p>
-              {qr && <img src={qr} alt="QR code להגדרת Google Authenticator" style={styles.qr} />}
+              <ol style={styles.steps}>
+                <SetupStep num={1} title="מתקינים את האפליקציה בטלפון">
+                  פותחים בטלפון את <b>Google Play</b> (אנדרואיד) או <b>App Store</b> (אייפון), מחפשים{' '}
+                  <b>Google Authenticator</b> ומתקינים. האפליקציה חינמית.
+                </SetupStep>
+                <SetupStep num={2} title="פותחים את האפליקציה ומוסיפים חשבון">
+                  לוחצים על כפתור ה-<b>+</b> (בפינה למטה), ובוחרים <b>"סריקת קוד QR"</b>.
+                  אם האפליקציה מבקשת גישה למצלמה - מאשרים.
+                </SetupStep>
+                <SetupStep num={3} title="סורקים את הברקוד שכאן">
+                  מכוונים את מצלמת הטלפון לברקוד:
+                  {qr && <img src={qr} alt="QR code להגדרת Google Authenticator" style={styles.qr} />}
+                  באפליקציה תופיע שורה חדשה בשם <b>דשבורד ל.כ</b> עם <b>קוד בן 6 ספרות</b>, שמתחלף כל 30 שניות.
+                </SetupStep>
+                <SetupStep num={4} title='מקלידים את הקוד ולוחצים "אמת והתחבר"'>
+                  מקלידים למטה את 6 הספרות שמופיעות כרגע באפליקציה. אם הקוד התחלף בזמן ההקלדה - פשוט מקלידים את החדש.
+                </SetupStep>
+              </ol>
             </>
           ) : (
-            <p style={styles.text}>הקלד את הקוד בן 6 הספרות מאפליקציית Google Authenticator.</p>
+            <>
+              <h1 style={styles.title}>אימות דו-שלבי</h1>
+              <p style={styles.text}>
+                פתח בטלפון את אפליקציית <b>Google Authenticator</b> והקלד את הקוד בן 6 הספרות שמופיע תחת <b>דשבורד ל.כ</b>.
+              </p>
+            </>
           )}
 
           <label style={styles.label}>קוד אימות</label>
@@ -99,6 +121,23 @@ export default function LoginPage() {
           <button type="submit" disabled={loading} style={styles.button}>
             {loading ? 'מאמת...' : 'אמת והתחבר'}
           </button>
+
+          {step === 'setup' && (
+            <>
+              <div style={styles.note}>
+                <b style={styles.noteTitle}>איך מתחברים מעכשיו והלאה?</b>
+                1. נכנסים לאתר ומקלידים אימייל וסיסמה, כרגיל.<br />
+                2. פותחים בטלפון את Google Authenticator ומקלידים את הקוד בן 6 הספרות שמופיע תחת "דשבורד ל.כ".<br />
+                אין צורך לסרוק שוב - הסריקה היא פעם אחת בלבד.
+              </div>
+              <div style={{ ...styles.note, background: '#f9fafb', borderColor: '#e5e7eb' }}>
+                <b style={styles.noteTitle}>אם משהו לא עובד</b>
+                • "קוד שגוי" - בדוק שהשעה בטלפון מוגדרת אוטומטית, ונסה את הקוד הבא.<br />
+                • "נגמר הזמן" - יש 5 דקות להשלים את ההגדרה. אם עבר יותר - מתחברים שוב עם אימייל וסיסמה, והברקוד יופיע מחדש.<br />
+                • החלפת טלפון או מחקת את האפליקציה - פנה למנהל המערכת לאיפוס.
+              </div>
+            </>
+          )}
         </form>
       </div>
     );
@@ -143,6 +182,18 @@ export default function LoginPage() {
   );
 }
 
+function SetupStep({ num, title, children }) {
+  return (
+    <li style={styles.step}>
+      <span style={styles.stepNum}>{num}</span>
+      <div style={{ flex: 1 }}>
+        <div style={styles.stepTitle}>{title}</div>
+        <div style={styles.stepBody}>{children}</div>
+      </div>
+    </li>
+  );
+}
+
 const styles = {
   page: {
     minHeight: '100vh',
@@ -152,13 +203,17 @@ const styles = {
     background: '#f4f5f7',
     fontFamily: 'sans-serif',
     direction: 'rtl',
+    padding: '24px 16px',
+    boxSizing: 'border-box',
   },
   card: {
     background: '#fff',
     padding: 32,
     borderRadius: 12,
     boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-    width: 360,
+    width: '100%',
+    maxWidth: 420,
+    boxSizing: 'border-box',
   },
   title: { marginBottom: 16, fontSize: 20 },
   logoBlock: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, marginBottom: 20 },
@@ -166,7 +221,14 @@ const styles = {
   roherLogo: { height: 34, objectFit: 'contain' },
   text: { fontSize: 13, color: '#555', lineHeight: 1.6, marginBottom: 12 },
   forgot: { marginTop: 14, marginBottom: 0, fontSize: 12, color: '#6b7280', textAlign: 'center' },
-  qr: { display: 'block', margin: '0 auto 16px', width: 200, height: 200 },
+  qr: { display: 'block', margin: '8px auto', width: 180, height: 180 },
+  steps: { listStyle: 'none', padding: 0, margin: '0 0 6px', display: 'flex', flexDirection: 'column', gap: 10 },
+  step: { display: 'flex', gap: 10, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px' },
+  stepNum: { flex: '0 0 24px', height: 24, borderRadius: '50%', background: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  stepTitle: { fontSize: 13.5, fontWeight: 700, color: '#111827', marginBottom: 3 },
+  stepBody: { fontSize: 12.5, color: '#555', lineHeight: 1.65 },
+  note: { marginTop: 16, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, lineHeight: 1.7, color: '#374151' },
+  noteTitle: { display: 'block', marginBottom: 2, color: '#111827' },
   label: { display: 'block', marginTop: 12, marginBottom: 4, fontSize: 14, color: '#333' },
   input: {
     width: '100%',
