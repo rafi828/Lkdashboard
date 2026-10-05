@@ -12,11 +12,11 @@ export default function SkuCompareUploadPage() {
 
       <div>
         <h1 style={styles.h1}>טעינת קבצים - השוואת מק"טים</h1>
-        <p style={styles.subtext}>קובץ התוצאות של כלי ההשוואה מזין את הדשבורד הזה</p>
+        <p style={styles.subtext}>שני קבצים מזינים את הדשבורד הזה: תוצאות כלי ההשוואה, ו"מרובי ברקודים" מפריוריטי (טוענים אחרי קובץ התוצאות)</p>
       </div>
 
-      <div style={{ maxWidth: 420 }}>
-        <FileUploadGrid fileKeys={['sku-compare']} columns={1} />
+      <div style={{ maxWidth: 860 }}>
+        <FileUploadGrid fileKeys={['sku-compare', 'sku-barcodes']} columns={2} />
       </div>
     </Layout>
   );

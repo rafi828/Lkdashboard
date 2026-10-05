@@ -4,15 +4,28 @@ import Layout, { IfCan, useMe, can } from '../../components/Layout';
 
 const CATALOG_URL = 'https://peledtech.com/catalog2024-25/';
 const PAGE_SIZE = 100;
-const CONFIDENCES = ['ודאי', 'סביר', 'לבדיקה', 'ללא התאמה'];
+const SIG = 'סיגנט ללא התאמה';
+const CONFIDENCES = ['ודאי', 'סביר', 'לבדיקה', 'ללא התאמה', SIG];
 const CONF_STYLE = {
-  'ודאי': { background: '#dcfce7', color: '#15803d', top: '#16a34a' },
-  'סביר': { background: '#dbeafe', color: '#1d4ed8', top: '#2563eb' },
-  'לבדיקה': { background: '#ffedd5', color: '#c2410c', top: '#ea580c' },
-  'ללא התאמה': { background: '#f3f4f6', color: '#4b5563', top: '#9ca3af' },
+  'ודאי': { background: '#dcfce7', color: '#15803d' },
+  'סביר': { background: '#dbeafe', color: '#1d4ed8' },
+  'לבדיקה': { background: '#ffedd5', color: '#c2410c' },
+  'ללא התאמה': { background: '#f3f4f6', color: '#4b5563' },
+  [SIG]: { background: '#e5e7eb', color: '#374151' },
 };
+// ריבועי הסיכום: כל ריבוע = רמת ביטחון (+ מקור). לחיצה מסננת את הטבלה לפיו.
+const KPIS = [
+  { label: 'ודאי', confidence: 'ודאי', source: '', top: '#16a34a' },
+  { label: 'סביר', confidence: 'סביר', source: '', top: '#2563eb' },
+  { label: 'לבדיקה – מנוע', confidence: 'לבדיקה', source: 'engine', top: '#ea580c' },
+  { label: 'לבדיקה – מרובי ברקודים', confidence: 'לבדיקה', source: 'barcodes', top: '#0d9488' },
+  { label: 'ללא התאמה', confidence: 'ללא התאמה', source: '', top: '#9ca3af' },
+  { label: SIG, confidence: SIG, source: '', top: '#6b7280' },
+];
+const SOURCE_LABELS = { engine: 'מנוע ההשוואה', barcodes: 'מרובי ברקודים' };
 const DECISION_LABELS = { approved: 'אושר', rejected: 'נדחה', corrected: 'תוקן' };
 const DECISION_STYLE = { approved: '#15803d', rejected: '#b91c1c', corrected: '#7c3aed' };
+const IMPORT_STYLE = '#0d9488';
 const COLUMNS = [
   ['lk_sku', 'מק"ט ל.כ'], ['lk_desc', 'תיאור ל.כ'], ['lk_dept', 'מחלקה'], ['comp_sku', 'מק"ט מתחרה'],
   ['comp_desc', 'תיאור מתחרה'], ['comp_brand', 'מותג'], ['confidence', 'רמת ביטחון'], ['notes', 'הערות'],
@@ -24,8 +37,14 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('he-IL');
 }
 
-// "ממתין להחלטה" = יש התאמה מהמנוע ועוד לא הוחלט עליה
-const isPending = (r) => r.confidence !== 'ללא התאמה' && !r.decision;
+// השוואת מק"טים בלי תלות באפסים בהתחלה (030210 = 30210) - כמו normSku ב-lib/sku-compare.js
+const normSku = (sku) => String(sku ?? '').trim().replace(/^0+(?=.)/, '');
+
+// המק"ט הסופי של שורת ל.כ אחרי ההחלטה הידנית (null = אין התאמה / נדחה)
+const effectiveSku = (r) => (r.decision === 'corrected' ? r.corrected_sku : r.decision === 'rejected' ? null : r.comp_sku);
+
+// "ממתין להחלטה" = יש התאמה (מהמנוע, או "לבדיקה" מהברקודים) ועוד לא הוחלט עליה. "יבוא ידני" ודאי לא ממתין.
+const isPending = (r) => !r.isSig && r.confidence !== 'ללא התאמה' && !r.decision && r.import_kind !== 'sure';
 
 export default function SkuComparePage() {
   return (
@@ -40,12 +59,15 @@ function SkuCompare() {
   const me = useMe();
   const canDecide = can(me, 'skucompare.decide');
   const [rows, setRows] = useState([]);
+  const [compItems, setCompItems] = useState([]);
   const [lastUpload, setLastUpload] = useState(null);
+  const [lastBarcodes, setLastBarcodes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
   const [confidence, setConfidence] = useState('');
+  const [source, setSource] = useState('');
   const [decisionFilter, setDecisionFilter] = useState('');
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [marked, setMarked] = useState(() => new Set());
@@ -53,6 +75,7 @@ function SkuCompare() {
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(0);
   const [fixRow, setFixRow] = useState(null);
+  const [assignRow, setAssignRow] = useState(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -61,7 +84,9 @@ function SkuCompare() {
       .then((d) => {
         if (d.error) return setError(d.error);
         setRows(d.rows);
+        setCompItems(d.compItems || []);
         setLastUpload(d.lastUpload);
+        setLastBarcodes(d.lastBarcodes);
       })
       .catch(() => setError('שגיאה בטעינת הנתונים'))
       .finally(() => setLoading(false));
@@ -69,23 +94,46 @@ function SkuCompare() {
 
   const deptOptions = useMemo(() => [...new Set(rows.map((r) => r.lk_dept).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')), [rows]);
 
+  const compMap = useMemo(() => new Map(compItems.map((c) => [normSku(c.comp_sku), c])), [compItems]);
+
+  // שורות ל.כ (מק"ט מתוקן -> פרטי המתחרה של המק"ט המתוקן) + שורות "סיגנט ללא התאמה":
+  // כל מק"ט מתחרה שלא משויך כרגע לאף פריט ל.כ. מחושב כאן, כך ששיוך מוריד את השורה מיד.
+  const allRows = useMemo(() => {
+    const lkRows = rows.map((r) => {
+      const row = { ...r, key: r.lk_sku };
+      if (r.decision === 'corrected') {
+        const c = compMap.get(normSku(r.corrected_sku));
+        Object.assign(row, {
+          comp_desc: c?.comp_desc || null, comp_brand: c?.comp_brand || null,
+          catalog_page: c?.catalog_page || null, comp_price: c?.comp_price ?? null,
+        });
+      }
+      return row;
+    });
+    const used = new Set(rows.map(effectiveSku).filter(Boolean).map(normSku));
+    const sigRows = compItems.filter((c) => !used.has(normSku(c.comp_sku))).map((c) => ({
+      ...c, key: `sig:${c.comp_sku}`, isSig: true, confidence: SIG, source: null,
+    }));
+    return lkRows.concat(sigRows);
+  }, [rows, compItems, compMap]);
+
   const counts = useMemo(() => {
-    const c = { pending: 0 };
-    CONFIDENCES.forEach((k) => { c[k] = 0; });
-    rows.forEach((r) => { c[r.confidence] = (c[r.confidence] || 0) + 1; if (isPending(r)) c.pending += 1; });
-    return c;
-  }, [rows]);
+    const kpi = KPIS.map((k) => allRows.filter((r) => r.confidence === k.confidence && (!k.source || r.source === k.source)).length);
+    return { kpi, pending: allRows.filter(isPending).length };
+  }, [allRows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let out = rows.filter((r) => {
-      if (onlyMarked && !marked.has(r.lk_sku)) return false;
+    let out = allRows.filter((r) => {
+      if (onlyMarked && !marked.has(r.key)) return false;
       if (dept && r.lk_dept !== dept) return false;
       if (confidence && r.confidence !== confidence) return false;
+      if (source && r.source !== source) return false;
       if (decisionFilter === 'none' && !isPending(r)) return false;
-      if (decisionFilter && decisionFilter !== 'none' && r.decision !== decisionFilter) return false;
+      if (decisionFilter === 'import' && !(r.import_kind === 'sure' && !r.decision)) return false;
+      if (decisionFilter && !['none', 'import'].includes(decisionFilter) && r.decision !== decisionFilter) return false;
       if (q) {
-        const hay = [r.lk_sku, r.lk_desc, r.comp_sku, r.corrected_sku, r.comp_desc, r.comp_brand, r.notes, r.decision_note]
+        const hay = [r.lk_sku, r.lk_desc, r.comp_sku, r.engine_comp_sku, r.corrected_sku, r.comp_desc, r.comp_brand, r.notes, r.decision_note]
           .filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
@@ -103,24 +151,24 @@ function SkuCompare() {
       });
     }
     return out;
-  }, [rows, search, dept, confidence, decisionFilter, onlyMarked, marked, sortKey, sortDir]);
+  }, [allRows, search, dept, confidence, source, decisionFilter, onlyMarked, marked, sortKey, sortDir]);
 
   // כל שינוי בסינון/מיון מחזיר לעמוד הראשון
-  useEffect(() => { setPage(0); }, [search, dept, confidence, decisionFilter, onlyMarked, sortKey, sortDir]);
+  useEffect(() => { setPage(0); }, [search, dept, confidence, source, decisionFilter, onlyMarked, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const allPageMarked = pageRows.length > 0 && pageRows.every((r) => marked.has(r.lk_sku));
+  const allPageMarked = pageRows.length > 0 && pageRows.every((r) => marked.has(r.key));
 
   function toggleSort(key) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(key); setSortDir('asc'); }
   }
 
-  function toggleMark(lkSku) {
+  function toggleMark(key) {
     setMarked((prev) => {
       const next = new Set(prev);
-      if (next.has(lkSku)) next.delete(lkSku); else next.add(lkSku);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   }
@@ -128,7 +176,7 @@ function SkuCompare() {
   function togglePageMarks() {
     setMarked((prev) => {
       const next = new Set(prev);
-      pageRows.forEach((r) => (allPageMarked ? next.delete(r.lk_sku) : next.add(r.lk_sku)));
+      pageRows.forEach((r) => (allPageMarked ? next.delete(r.key) : next.add(r.key)));
       return next;
     });
   }
@@ -139,12 +187,25 @@ function SkuCompare() {
   }
 
   function resetFilters() {
-    setSearch(''); setDept(''); setConfidence(''); setDecisionFilter(''); setOnlyMarked(false); setSortKey(null);
+    setSearch(''); setDept(''); setConfidence(''); setSource(''); setDecisionFilter(''); setOnlyMarked(false); setSortKey(null);
   }
 
-  function onKpiClick(key) {
-    if (key === 'pending') { setDecisionFilter('none'); setConfidence(''); return; }
-    setConfidence((cur) => (cur === key ? '' : key));
+  const kpiSelected = (k) => confidence === k.confidence && source === k.source;
+
+  function onKpiClick(k) {
+    if (k === 'pending') { setDecisionFilter('none'); setConfidence(''); setSource(''); return; }
+    if (kpiSelected(k)) { setConfidence(''); setSource(''); return; }
+    setConfidence(k.confidence); setSource(k.source); setDecisionFilter('');
+  }
+
+  // שיוך משורת "סיגנט ללא התאמה": נשמר כהחלטה "תוקן" על פריט ל.כ
+  async function assignLk(sigRow, lkSkuInput, note) {
+    const lkSku = lkSkuInput.trim();
+    const lkRow = rows.find((r) => r.lk_sku === lkSku) || rows.find((r) => normSku(r.lk_sku) === normSku(lkSku));
+    if (!lkRow) { alert(`מק"ט ל.כ ${lkSku} לא נמצא בדוח`); return false; }
+    const current = effectiveSku(lkRow);
+    if (current && !window.confirm(`לפריט ${lkRow.lk_sku} כבר משויך מק"ט ${current}. להחליף ל-${sigRow.comp_sku}?`)) return false;
+    return saveDecision(lkRow.lk_sku, 'corrected', sigRow.comp_sku, note || 'שיוך משורת מתחרה ללא התאמה');
   }
 
   async function saveDecision(lkSku, decision, correctedSku, note) {
@@ -168,14 +229,16 @@ function SkuCompare() {
 
   // מסומנים -> רק הם. לא סומן כלום -> כל מה שמוצג כרגע בטבלה (בלי סינון = כל הטבלה).
   async function exportExcel() {
-    const lkSkus = marked.size > 0 ? Array.from(marked) : filtered.map((r) => r.lk_sku);
-    if (lkSkus.length === 0) { alert('אין שורות לייצוא'); return; }
+    const keys = marked.size > 0 ? Array.from(marked) : filtered.map((r) => r.key);
+    if (keys.length === 0) { alert('אין שורות לייצוא'); return; }
+    const lkSkus = keys.filter((k) => !k.startsWith('sig:'));
+    const compSkus = keys.filter((k) => k.startsWith('sig:')).map((k) => k.slice(4));
     setExporting(true);
     try {
       const res = await fetch('/api/dashboard/sku-compare-export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lkSkus }),
+        body: JSON.stringify({ lkSkus, compSkus }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -207,6 +270,7 @@ function SkuCompare() {
             {lastUpload
               ? `קטלוג ל.כ מול קטלוג מתחרים · קובץ אחרון: ${lastUpload.filename} · הועלה ${fmtDate(lastUpload.uploaded_at)}${lastUpload.uploaded_by_name ? ` ע"י ${lastUpload.uploaded_by_name}` : ''}`
               : 'קטלוג ל.כ מול קטלוג מתחרים'}
+            {lastBarcodes && ` · מרובי ברקודים: ${lastBarcodes.filename} (${fmtDate(lastBarcodes.uploaded_at)})`}
           </p>
         </div>
         <IfCan permission="skucompare.upload">
@@ -224,11 +288,11 @@ function SkuCompare() {
       {rows.length > 0 && (
         <>
           <div style={styles.kpiGrid}>
-            {CONFIDENCES.map((k) => (
-              <button key={k} onClick={() => onKpiClick(k)}
-                style={{ ...styles.kpi, borderTopColor: CONF_STYLE[k].top, ...(confidence === k ? styles.kpiSel : {}) }}>
-                <span style={styles.kpiLabel}>{k}</span>
-                <span style={styles.kpiValue}>{counts[k].toLocaleString('he-IL')}</span>
+            {KPIS.map((k, i) => (
+              <button key={k.label} onClick={() => onKpiClick(k)}
+                style={{ ...styles.kpi, borderTopColor: k.top, ...(kpiSelected(k) ? styles.kpiSel : {}) }}>
+                <span style={styles.kpiLabel}>{k.label}</span>
+                <span style={styles.kpiValue}>{counts.kpi[i].toLocaleString('he-IL')}</span>
               </button>
             ))}
             <button onClick={() => onKpiClick('pending')}
@@ -249,9 +313,14 @@ function SkuCompare() {
                 <option value="">כל רמות הביטחון</option>
                 {CONFIDENCES.map((c) => <option key={c}>{c}</option>)}
               </select>
+              <select value={source} onChange={(e) => setSource(e.target.value)} style={styles.select}>
+                <option value="">כל המקורות</option>
+                {Object.entries(SOURCE_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
               <select value={decisionFilter} onChange={(e) => setDecisionFilter(e.target.value)} style={styles.select}>
                 <option value="">כל ההחלטות</option>
                 <option value="none">ממתין להחלטה</option>
+                <option value="import">יבוא ידני</option>
                 <option value="approved">אושר</option>
                 <option value="rejected">נדחה</option>
                 <option value="corrected">תוקן</option>
@@ -287,10 +356,13 @@ function SkuCompare() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pageRows.map((r) => (
-                    <Row key={r.lk_sku} r={r} marked={marked.has(r.lk_sku)} onMark={() => toggleMark(r.lk_sku)}
+                  {pageRows.map((r) => (r.isSig ? (
+                    <SigRow key={r.key} r={r} marked={marked.has(r.key)} onMark={() => toggleMark(r.key)}
+                      canDecide={canDecide} onAssign={() => setAssignRow(r)} />
+                  ) : (
+                    <Row key={r.key} r={r} marked={marked.has(r.key)} onMark={() => toggleMark(r.key)}
                       canDecide={canDecide} onDecide={saveDecision} onFix={() => setFixRow(r)} />
-                  ))}
+                  )))}
                   {pageRows.length === 0 && (
                     <tr><td colSpan={COLUMNS.length + 2} style={styles.empty}>אין שורות שמתאימות לסינון</td></tr>
                   )}
@@ -310,7 +382,7 @@ function SkuCompare() {
                   <button onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={page >= pageCount - 1} style={styles.resetBtn}>הבא ←</button>
                 </span>
               )}
-              <span style={{ color: '#9ca3af' }}>החלטה ידנית גוברת על תוצאת המנוע ונשמרת גם אחרי טעינת קובץ חדש</span>
+              <span style={{ color: '#9ca3af' }}>החלטה ידנית גוברת על "מרובי ברקודים" ועל תוצאת המנוע, ונשמרת גם אחרי טעינת קובץ חדש</span>
             </div>
           </div>
         </>
@@ -318,6 +390,8 @@ function SkuCompare() {
 
       {fixRow && <FixModal row={fixRow} onClose={() => setFixRow(null)}
         onSave={async (sku, note) => { if (await saveDecision(fixRow.lk_sku, 'corrected', sku, note)) setFixRow(null); }} />}
+      {assignRow && <AssignModal row={assignRow} onClose={() => setAssignRow(null)}
+        onSave={async (lkSku, note) => { if (await assignLk(assignRow, lkSku, note)) setAssignRow(null); }} />}
     </div>
   );
 }
@@ -335,13 +409,22 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
         {r.decision === 'corrected' ? (
           <>
             <span style={styles.sku}>{r.corrected_sku}</span>
-            {r.comp_sku && <span style={styles.orig}>{r.comp_sku} (מנוע)</span>}
+            {r.comp_sku && <span style={styles.orig}>{r.comp_sku} ({r.source === 'barcodes' ? 'ברקודים' : 'מנוע'})</span>}
           </>
-        ) : <span style={styles.sku}>{r.comp_sku}</span>}
+        ) : (
+          <>
+            <span style={styles.sku}>{r.comp_sku}</span>
+            {r.source === 'barcodes' && r.engine_comp_sku && normSku(r.engine_comp_sku) !== normSku(r.comp_sku)
+              && <span style={styles.orig}>{r.engine_comp_sku} (מנוע)</span>}
+          </>
+        )}
       </td>
       <td style={styles.tdWide}>{r.comp_desc}</td>
       <td style={styles.td}>{r.comp_brand}</td>
-      <td style={styles.td}><span style={{ ...styles.badge, background: conf.background, color: conf.color }}>{r.confidence}</span></td>
+      <td style={styles.td}>
+        <span style={{ ...styles.badge, background: conf.background, color: conf.color }}>{r.confidence}</span>
+        {r.source === 'barcodes' && <span style={styles.chip}>מרובי ברקודים</span>}
+      </td>
       <td style={styles.tdNote}>{r.notes}</td>
       <td style={styles.td}>
         {r.catalog_page && <a href={`${CATALOG_URL}${r.catalog_page}/`} target="_blank" rel="noreferrer" style={styles.pageLink}>עמ' {r.catalog_page} ↗</a>}
@@ -356,6 +439,12 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
               {[r.decided_by_name, fmtDate(r.decided_at)].filter(Boolean).join(' · ')}{r.decision_note ? ' · 💬' : ''}
             </span>
           </div>
+        ) : r.import_kind === 'sure' ? (
+          <div style={styles.actions}>
+            <span style={{ ...styles.badge, background: IMPORT_STYLE, color: '#fff' }}>יבוא ידני</span>
+            {canDecide && <button onClick={() => onDecide(r.lk_sku, 'rejected')} style={{ ...styles.act, ...styles.actRej }}>✗ דחייה</button>}
+            {canDecide && <button onClick={onFix} style={{ ...styles.act, ...styles.actFix }}>✎ תיקון</button>}
+          </div>
         ) : canDecide ? (
           <div style={styles.actions}>
             {!noMatch && <button onClick={() => onDecide(r.lk_sku, 'approved')} style={{ ...styles.act, ...styles.actOk }}>✓ אישור</button>}
@@ -368,6 +457,54 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
   );
 }
 
+// שורת "סיגנט ללא התאמה": פריט מתחרה שאין לו פריט ל.כ משויך
+function SigRow({ r, marked, onMark, canDecide, onAssign }) {
+  const conf = CONF_STYLE[SIG];
+  return (
+    <tr style={{ background: marked ? '#fffbeb' : '#fafafa' }}>
+      <td style={styles.tdCheck}><input type="checkbox" checked={marked} onChange={onMark} /></td>
+      <td style={{ ...styles.td, color: '#9ca3af' }}>—</td>
+      <td style={styles.tdWide} />
+      <td style={styles.tdMid}>{r.category}</td>
+      <td style={styles.td}><span style={styles.sku}>{r.comp_sku}</span></td>
+      <td style={styles.tdWide}>{r.comp_desc}</td>
+      <td style={styles.td}>{r.comp_brand}</td>
+      <td style={styles.td}><span style={{ ...styles.badge, background: conf.background, color: conf.color }}>{SIG}</span></td>
+      <td style={styles.tdNote} />
+      <td style={styles.td}>
+        {r.catalog_page && <a href={`${CATALOG_URL}${r.catalog_page}/`} target="_blank" rel="noreferrer" style={styles.pageLink}>עמ' {r.catalog_page} ↗</a>}
+      </td>
+      <td style={styles.td}>{r.comp_price != null ? '₪' + r.comp_price.toLocaleString('he-IL') : ''}</td>
+      <td style={styles.td}>
+        {canDecide ? <button onClick={onAssign} style={{ ...styles.act, ...styles.actLink }}>🔗 שיוך מק"ט ל.כ</button>
+          : <span style={{ color: '#9ca3af' }}>—</span>}
+      </td>
+    </tr>
+  );
+}
+
+function AssignModal({ row, onClose, onSave }) {
+  const [lkSku, setLkSku] = useState('');
+  const [note, setNote] = useState('');
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>שיוך מק"ט ל.כ לפריט מתחרה</h3>
+        <div style={{ fontSize: 12.5, color: '#6b7280' }}>{row.comp_sku} · {row.comp_desc}{row.comp_brand ? ` (${row.comp_brand})` : ''}</div>
+        <label style={styles.modalLabel}>מק"ט ל.כ</label>
+        <input value={lkSku} onChange={(e) => setLkSku(e.target.value)} placeholder="למשל 1021022" style={styles.modalInput} autoFocus />
+        <label style={styles.modalLabel}>הערה (לא חובה)</label>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={styles.modalInput} />
+        <div style={{ fontSize: 11.5, color: '#6b7280' }}>יישמר כהחלטה "תוקן" על פריט ל.כ (גובר על המנוע ועל מרובי ברקודים), והשורה תצא מרשימת "{SIG}".</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button onClick={() => (lkSku.trim() ? onSave(lkSku, note) : alert('יש להזין מק"ט ל.כ'))} style={styles.exportBtn}>שמירה</button>
+          <button onClick={onClose} style={styles.resetBtn}>ביטול</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FixModal({ row, onClose, onSave }) {
   const [sku, setSku] = useState(row.corrected_sku || '');
   const [note, setNote] = useState('');
@@ -376,7 +513,7 @@ function FixModal({ row, onClose, onSave }) {
       <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: 0, fontSize: 16 }}>{row.comp_sku ? 'תיקון מק"ט מתחרה' : 'הזנת מק"ט מתחרה'}</h3>
         <div style={{ fontSize: 12.5, color: '#6b7280' }}>
-          {row.lk_sku} · {row.lk_desc}{row.comp_sku ? ` (המנוע הציע: ${row.comp_sku})` : ''}
+          {row.lk_sku} · {row.lk_desc}{row.comp_sku ? ` (${row.source === 'barcodes' ? 'מרובי ברקודים' : 'המנוע'}: ${row.comp_sku})` : ''}
         </div>
         <label style={styles.modalLabel}>מק"ט נכון אצל המתחרה</label>
         <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="למשל 012317" style={styles.modalInput} autoFocus />
@@ -398,11 +535,11 @@ const styles = {
   subtext: { margin: '2px 0 0', fontSize: 12.5, color: '#6b7280' },
   card: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: '14px 16px' },
   uploadBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#111827', background: '#fff', border: '1px solid #d1d5db', borderRadius: 9, padding: '9px 14px', cursor: 'pointer', whiteSpace: 'nowrap' },
-  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10 },
-  kpi: { background: '#fff', border: '1px solid #e9e9ec', borderTop: '3px solid', borderRadius: 10, padding: '7px 12px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, cursor: 'pointer', textAlign: 'right', font: 'inherit', color: 'inherit' },
+  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0,1fr))', gap: 8 },
+  kpi: { background: '#fff', border: '1px solid #e9e9ec', borderTop: '3px solid', borderRadius: 10, padding: '6px 10px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, cursor: 'pointer', textAlign: 'right', font: 'inherit', color: 'inherit' },
   kpiSel: { outline: '2px solid #111827' },
-  kpiLabel: { fontSize: 12.5, color: '#6b7280', fontWeight: 600 },
-  kpiValue: { fontSize: 19, fontWeight: 700 },
+  kpiLabel: { fontSize: 11.5, color: '#6b7280', fontWeight: 600, lineHeight: 1.25 },
+  kpiValue: { fontSize: 18, fontWeight: 700 },
   filters: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
   search: { flex: 1, minWidth: 220, fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db' },
   select: { fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', minWidth: 150, background: '#fff' },
@@ -430,6 +567,8 @@ const styles = {
   actOk: { color: '#15803d', borderColor: '#86efac' },
   actRej: { color: '#b91c1c', borderColor: '#fca5a5' },
   actFix: { color: '#7c3aed', borderColor: '#c4b5fd' },
+  actLink: { color: '#0f766e', borderColor: '#5eead4' },
+  chip: { display: 'block', width: 'fit-content', marginTop: 3, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: '#ccfbf1', color: '#0f766e' },
   actUndo: { color: '#6b7280', borderColor: '#d1d5db' },
   who: { fontSize: 10.5, color: '#9ca3af' },
   empty: { textAlign: 'center', color: '#9ca3af', padding: 24 },
