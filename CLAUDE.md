@@ -59,7 +59,9 @@
   file-uploads.js       - recordFileUpload(fileKey, filename, userId) - שומר "הועלה לאחרונה" בטבלת file_uploads.
   mailer.js             - עטיפת nodemailer סביב SMTP. **לא עובד כרגע** - ראה "בעיה פתוחה: SMTP".
   quarterly-email-template.js - בונה HTML למייל סטטוס יעד רבעוני ללקוח (משמש את quarterly-targets-send.js).
-  sku-compare.js        - getSkuCompareRows(lkSkus?) - שורות "השוואת מק"טים": תוצאת מנוע + החלטה ידנית (JOIN).
+  sku-compare.js        - "השוואת מק"טים": getSkuCompareRows(lkSkus?) - שורה סופית לכל פריט ל.כ לפי סדר עדיפות
+                          החלטה ידנית > יבוא "מרובי ברקודים" > תוצאת המנוע; matchBarcodes() - התאמת ברקודים;
+                          normSku() - השוואת מק"ט בלי אפסים בהתחלה.
 /pages
   login.js            - התחברות: אימייל+סיסמה -> קוד Google Authenticator. בכניסה ראשונה: QR + הסבר שלב-אחר-שלב.
                         השם באפליקציה ("דשבורד ל.כ") מוגדר ב-ISSUER ב-lib/totp.js (משפיע רק על סריקות חדשות).
@@ -81,7 +83,10 @@
                                 (גלילה בתוך הטבלה, שורת כותרות קפואה),
                                 כפתורי אישור/דחייה/תיקון בשורה אחת (skucompare.decide), צ'קבוקס לכל שורה (נשמר בין חיפושים,
                                 נמחק ביציאה מהמסך), "הצג מסומנים בלבד", ייצוא לאקסל (מסומנים, או כל מה שמוצג אם לא סומן כלום).
-    sku-compare-upload.js     - עמוד טעינת קובץ התוצאות של כלי ההשוואה (dropzone בודד).
+                                ריבועים נפרדים "לבדיקה – מנוע" / "לבדיקה – מרובי ברקודים", סינון "מקור", החלטה "יבוא ידני".
+                                בסוף הטבלה שורות "סיגנט ללא התאמה" (מק"טי מתחרה שלא משויכים לאף פריט ל.כ - מחושב במסך)
+                                עם כפתור "שיוך מק"ט ל.כ" (נשמר כהחלטה corrected על פריט ל.כ).
+    sku-compare-upload.js     - עמוד טעינת קבצים: תוצאות כלי ההשוואה + "מרובי ברקודים" (ייצוא פריוריטי).
     trends.js                 - "מגמות והיסטוריה" (קיים אך לא מקושר בתפריט הנוכחי - לבדוק אם רלוונטי).
   /api
     login.js, logout.js, me.js, totp/confirm.js
@@ -94,7 +99,9 @@
     upload/sales-matrix.js             - טעינת מטריצת מכירות חודשית (מבוסס כותרת "סוכן" + MM/YYYY).
     upload/quarterly-targets.js        - טעינת קובץ יעדים רבעוניים ללקוח (מבוסס כותרות מדויקות).
     upload/sku-compare.js              - טעינת קובץ תוצאות ההשוואה (גיליונות "התאמות" + "ל.כ ללא התאמה", לפי כותרות).
-                                         מחליף את כל sku_compare_items; לא נוגע ב-sku_compare_decisions.
+                                         מחליף את sku_compare_items + sku_compare_comp_items; לא נוגע בהחלטות וביבוא.
+    upload/sku-barcodes.js             - טעינת "מרובי ברקודים" (פריוריטי: HTML ב-UTF-16 עם סיומת xls; עמודות פריט/ברקוד).
+                                         ברקוד = מק"ט מתחרה -> שיוך. מחליף את כל sku_compare_imports.
     upload/status.js                   - GET "הועלה לאחרונה" לכל סוגי הקבצים (מ-file_uploads).
     dashboard/targets-summary.js       - נתוני "תקציב מול ביצוע" (מחושב, כולל diff/completion/contribution/profit[null]).
     dashboard/trends.js                - נתוני "מגמות".
@@ -146,12 +153,14 @@ customer_quarterly_targets (
   UNIQUE(customer_id, year)
 )
 
-file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'|'sku-compare'], filename, uploaded_at, uploaded_by)
+file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'|'sku-compare'|'sku-barcodes'], filename, uploaded_at, uploaded_by)
 
 sku_compare_items (lk_sku PK, lk_desc, lk_dept, comp_sku, comp_desc, comp_brand,
                    confidence['ודאי'|'סביר'|'לבדיקה'|'ללא התאמה'], notes, catalog_page, comp_price)  -- מוחלף בכל טעינה
 sku_compare_decisions (lk_sku PK, decision['approved'|'rejected'|'corrected'], corrected_sku, note,
-                       decided_by, decided_at)                            -- לא נמחק בטעינה, גובר על תוצאת המנוע
+                       decided_by, decided_at)                            -- לא נמחק בטעינה, גובר על הכל
+sku_compare_comp_items (comp_sku PK, comp_desc, comp_brand, category, catalog_page, comp_price)  -- כל מק"טי המתחרה, מוחלף בטעינת התוצאות
+sku_compare_imports (lk_sku PK, kind['sure'|'multi'], comp_sku, options, imported_at, imported_by)  -- "מרובי ברקודים", מוחלף בטעינת הקובץ
 ```
 
 ### ⚠️ עקרון קריטי: שינוי סכימה = קובץ migration חדש (אוטומטי מאוקטובר 2026)

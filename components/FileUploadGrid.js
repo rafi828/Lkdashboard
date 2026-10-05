@@ -49,8 +49,19 @@ export const FILES = [
     method: 'header',
     format: (
       <>
-        גיליונות בשם <b>"התאמות"</b> ו-<b>"ל.כ ללא התאמה"</b>, עם עמודה <b>"מק"ט ל.כ"</b> ושאר הכותרות כפי שהכלי מייצר.<br />
-        כל טעינה מחליפה את תוצאות המנוע. <b>ההחלטות הידניות (אישור/דחייה/תיקון) נשמרות</b> ולא נמחקות.
+        גיליונות בשם <b>"התאמות"</b>, <b>"ל.כ ללא התאמה"</b> ו-<b>"סיגנט ללא התאמה"</b>, עם עמודה <b>"מק"ט ל.כ"</b> ושאר הכותרות כפי שהכלי מייצר.<br />
+        כל טעינה מחליפה את תוצאות המנוע. <b>ההחלטות הידניות ויבוא "מרובי ברקודים" נשמרים</b> ולא נמחקים.
+      </>
+    ),
+  },
+  {
+    key: 'sku-barcodes', group: 'sku-compare', title: 'מרובי ברקודים', hint: 'ייצוא "רשימת פריטים וברקודים" מפריוריטי', endpoint: '/api/upload/sku-barcodes',
+    method: 'header',
+    format: (
+      <>
+        עמודות <b>"פריט"</b> (מק"ט ל.כ) ו-<b>"ברקוד"</b> - שורה לכל ברקוד. הקובץ מפריוריטי נקרא כמו שהוא (גם xls של פריוריטי).<br />
+        ברקוד שהוא מק"ט מתחרה = שיוך (בלי תלות באפסים בהתחלה). מק"ט אחד -&gt; <b>ודאי ("יבוא ידני")</b>; כמה מק"טים -&gt; <b>לבדיקה</b>.<br />
+        טעינה חוזרת = <b>עדכון</b>: השיוכים הקודמים מוחלפים. החלטה ידנית במסך תמיד גוברת.
       </>
     ),
   },
@@ -86,7 +97,7 @@ export default function FileUploadGrid({ fileKeys, columns = 3 }) {
         setStatus((s) => ({ ...s, [fileConf.key]: { state: 'error', message: data.error } }));
         return;
       }
-      setStatus((s) => ({ ...s, [fileConf.key]: { state: 'done', fileName: file.name, rows: data.rows } }));
+      setStatus((s) => ({ ...s, [fileConf.key]: { state: 'done', fileName: file.name, rows: data.rows, summary: data.summary } }));
       setLastUploads((prev) => ({ ...prev, [fileConf.key]: { filename: file.name, uploadedAt: new Date().toISOString() } }));
     } catch (e) {
       setStatus((s) => ({ ...s, [fileConf.key]: { state: 'error', message: 'שגיאת רשת' } }));
@@ -113,6 +124,7 @@ function Dropzone({ f, status: st, lastUpload, onUpload }) {
       {st?.state === 'uploading' && <div style={styles.uploading}>מעלה...</div>}
       {st?.state === 'error' && <div style={styles.error}>{st.message}</div>}
       {st?.state === 'done' && <div style={styles.done}>✓ {st.fileName} ({st.rows} שורות)</div>}
+      {st?.state === 'done' && st.summary && <div style={styles.summary}>{st.summary}</div>}
 
       {!st && lastUpload && (
         <div style={styles.lastUpload}>
@@ -149,6 +161,7 @@ const styles = {
   title: { fontSize: 14, fontWeight: 700, color: '#111827' },
   hint: { fontSize: 12, color: '#9ca3af' },
   done: { fontSize: 12, fontWeight: 600, color: '#16a34a' },
+  summary: { width: '100%', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#155e75', textAlign: 'right', lineHeight: 1.7 },
   error: { fontSize: 12, fontWeight: 600, color: '#dc2626' },
   uploading: { fontSize: 12, fontWeight: 600, color: '#d97706' },
   lastUpload: {

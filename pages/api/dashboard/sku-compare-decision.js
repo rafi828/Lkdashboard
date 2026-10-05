@@ -17,8 +17,12 @@ export default async function handler(req, res) {
   if (decision === 'corrected' && !fixed) return res.status(400).json({ error: 'יש להזין את המק"ט הנכון' });
 
   const pool = getPool();
-  const { rows: item } = await pool.query('SELECT comp_sku, confidence FROM sku_compare_items WHERE lk_sku = $1', [lkSku]);
-  if (!item[0]) return res.status(404).json({ error: 'הפריט לא נמצא בדוח' });
+  const { rows: item } = await pool.query(
+    `SELECT COALESCE(im.comp_sku, i.comp_sku) AS comp_sku FROM sku_compare_items i
+     LEFT JOIN sku_compare_imports im ON im.lk_sku = i.lk_sku WHERE i.lk_sku = $1`,
+    [lkSku]
+  );
+  if (!item[0]) return res.status(404).json({ error: `מק"ט ל.כ ${lkSku} לא נמצא בדוח` });
   if (decision !== null && decision !== 'corrected' && !item[0].comp_sku) {
     return res.status(400).json({ error: 'לפריט אין התאמה לאשר או לדחות - אפשר רק להזין מק"ט (תיקון)' });
   }
