@@ -199,7 +199,7 @@ function SkuCompare() {
   const exportLabel = marked.size > 0 ? `ייצוא ${marked.size} מסומנים לאקסל` : `ייצוא לאקסל (${filtered.length.toLocaleString('he-IL')} שורות)`;
 
   return (
-    <>
+    <div style={styles.page}>
       <div style={styles.headerRow}>
         <div>
           <h1 style={styles.h1}>השוואת מק"טים</h1>
@@ -229,14 +229,12 @@ function SkuCompare() {
                 style={{ ...styles.kpi, borderTopColor: CONF_STYLE[k].top, ...(confidence === k ? styles.kpiSel : {}) }}>
                 <span style={styles.kpiLabel}>{k}</span>
                 <span style={styles.kpiValue}>{counts[k].toLocaleString('he-IL')}</span>
-                <span style={styles.kpiHint}>{k === 'ללא התאמה' ? 'פריטי ל.כ בלי מקבילה' : 'לחיצה = סינון הטבלה'}</span>
               </button>
             ))}
             <button onClick={() => onKpiClick('pending')}
               style={{ ...styles.kpi, borderTopColor: '#111827', ...(decisionFilter === 'none' ? styles.kpiSel : {}) }}>
               <span style={styles.kpiLabel}>ממתינים להחלטה</span>
               <span style={styles.kpiValue}>{counts.pending.toLocaleString('he-IL')}</span>
-              <span style={styles.kpiHint}>התאמות שעוד לא אושרו / נדחו</span>
             </button>
           </div>
 
@@ -273,7 +271,7 @@ function SkuCompare() {
               </button>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div style={styles.tableScroll}>
               <table style={styles.table}>
                 <thead>
                   <tr>
@@ -320,7 +318,7 @@ function SkuCompare() {
 
       {fixRow && <FixModal row={fixRow} onClose={() => setFixRow(null)}
         onSave={async (sku, note) => { if (await saveDecision(fixRow.lk_sku, 'corrected', sku, note)) setFixRow(null); }} />}
-    </>
+    </div>
   );
 }
 
@@ -349,13 +347,14 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
         {r.catalog_page && <a href={`${CATALOG_URL}${r.catalog_page}/`} target="_blank" rel="noreferrer" style={styles.pageLink}>עמ' {r.catalog_page} ↗</a>}
       </td>
       <td style={styles.td}>{r.comp_price != null ? '₪' + r.comp_price.toLocaleString('he-IL') : ''}</td>
-      <td style={{ ...styles.td, whiteSpace: 'normal' }}>
+      <td style={styles.td}>
         {r.decision ? (
-          <div>
+          <div style={styles.actions}>
             <span style={{ ...styles.badge, background: DECISION_STYLE[r.decision], color: '#fff' }}>{DECISION_LABELS[r.decision]}</span>
-            {canDecide && <button onClick={() => onDecide(r.lk_sku, null)} style={{ ...styles.act, ...styles.actUndo, marginInlineStart: 6 }}>ביטול</button>}
-            <span style={styles.who}>{[r.decided_by_name, fmtDate(r.decided_at)].filter(Boolean).join(' · ')}</span>
-            {r.decision_note && <span style={styles.who}>{r.decision_note}</span>}
+            {canDecide && <button onClick={() => onDecide(r.lk_sku, null)} style={{ ...styles.act, ...styles.actUndo }}>ביטול</button>}
+            <span style={styles.who} title={r.decision_note || ''}>
+              {[r.decided_by_name, fmtDate(r.decided_at)].filter(Boolean).join(' · ')}{r.decision_note ? ' · 💬' : ''}
+            </span>
           </div>
         ) : canDecide ? (
           <div style={styles.actions}>
@@ -393,47 +392,48 @@ function FixModal({ row, onClose, onSave }) {
 }
 
 const styles = {
-  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  h1: { margin: 0, fontSize: 24, fontWeight: 700, color: '#111827' },
-  subtext: { margin: '4px 0 0', fontSize: 13, color: '#6b7280' },
-  card: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: 20 },
+  page: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: -12 },
+  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#111827' },
+  subtext: { margin: '2px 0 0', fontSize: 12.5, color: '#6b7280' },
+  card: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: '14px 16px' },
   uploadBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#111827', background: '#fff', border: '1px solid #d1d5db', borderRadius: 9, padding: '9px 14px', cursor: 'pointer', whiteSpace: 'nowrap' },
-  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 14 },
-  kpi: { background: '#fff', border: '1px solid #e9e9ec', borderTop: '4px solid', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', textAlign: 'right', font: 'inherit', color: 'inherit' },
+  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 10 },
+  kpi: { background: '#fff', border: '1px solid #e9e9ec', borderTop: '3px solid', borderRadius: 10, padding: '7px 12px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, cursor: 'pointer', textAlign: 'right', font: 'inherit', color: 'inherit' },
   kpiSel: { outline: '2px solid #111827' },
   kpiLabel: { fontSize: 12.5, color: '#6b7280', fontWeight: 600 },
-  kpiValue: { fontSize: 26, fontWeight: 700 },
-  kpiHint: { fontSize: 11.5, color: '#9ca3af' },
+  kpiValue: { fontSize: 19, fontWeight: 700 },
   filters: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
   search: { flex: 1, minWidth: 220, fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db' },
   select: { fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', minWidth: 150, background: '#fff' },
   resetBtn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', color: '#374151' },
   toggleOn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: '1px solid #111827', background: '#111827', cursor: 'pointer', color: '#fff', fontWeight: 600 },
   exportBtn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600 },
-  markBar: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid #f3f4f6' },
+  markBar: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f3f4f6' },
   markCount: { fontSize: 12.5, color: '#374151', fontWeight: 600, marginInlineEnd: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 12 },
-  th: { textAlign: 'right', padding: '8px 8px', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #eee', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' },
-  thCheck: { padding: '8px 6px', borderBottom: '1px solid #eee', width: 28 },
+  tableScroll: { overflow: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 320, marginTop: 10, border: '1px solid #f0f0f0', borderRadius: 8 },
+  table: { width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
+  th: { position: 'sticky', top: 0, zIndex: 2, background: '#f9fafb', textAlign: 'right', padding: '7px 8px', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' },
+  thCheck: { position: 'sticky', top: 0, zIndex: 2, background: '#f9fafb', padding: '7px 6px', borderBottom: '1px solid #e5e7eb', width: 28 },
   arrow: { color: '#d1d5db', fontSize: 10 },
-  td: { textAlign: 'right', padding: '9px 8px', borderBottom: '1px solid #f5f5f5', verticalAlign: 'top', whiteSpace: 'nowrap' },
-  tdCheck: { padding: '9px 6px', borderBottom: '1px solid #f5f5f5', verticalAlign: 'top' },
-  tdWide: { textAlign: 'right', padding: '9px 8px', borderBottom: '1px solid #f5f5f5', verticalAlign: 'top', minWidth: 120, maxWidth: 220 },
-  tdMid: { textAlign: 'right', padding: '9px 8px', borderBottom: '1px solid #f5f5f5', verticalAlign: 'top', minWidth: 80, maxWidth: 120 },
-  tdNote: { textAlign: 'right', padding: '9px 8px', borderBottom: '1px solid #f5f5f5', verticalAlign: 'top', minWidth: 110, maxWidth: 170, color: '#6b7280', fontSize: 11 },
+  td: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', whiteSpace: 'nowrap' },
+  tdCheck: { padding: '5px 6px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top' },
+  tdWide: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 110, maxWidth: 200 },
+  tdMid: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 70, maxWidth: 100 },
+  tdNote: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 100, maxWidth: 150, color: '#6b7280', fontSize: 11 },
   sku: { fontFamily: 'Consolas, monospace', fontWeight: 700 },
   orig: { display: 'block', textDecoration: 'line-through', color: '#9ca3af', fontSize: 11, fontWeight: 400 },
   badge: { fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 10, whiteSpace: 'nowrap' },
   pageLink: { color: '#dc2626', fontWeight: 700, textDecoration: 'none' },
-  actions: { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 },
-  act: { fontSize: 11, fontWeight: 700, borderRadius: 7, padding: '4px 7px', cursor: 'pointer', border: '1px solid', background: '#fff' },
+  actions: { display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' },
+  act: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 6px', lineHeight: '16px', cursor: 'pointer', border: '1px solid', background: '#fff' },
   actOk: { color: '#15803d', borderColor: '#86efac' },
   actRej: { color: '#b91c1c', borderColor: '#fca5a5' },
   actFix: { color: '#7c3aed', borderColor: '#c4b5fd' },
   actUndo: { color: '#6b7280', borderColor: '#d1d5db' },
-  who: { display: 'block', fontSize: 10.5, color: '#9ca3af', marginTop: 3, whiteSpace: 'normal', maxWidth: 200 },
+  who: { fontSize: 10.5, color: '#9ca3af' },
   empty: { textAlign: 'center', color: '#9ca3af', padding: 24 },
-  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, fontSize: 12, color: '#6b7280', marginTop: 12 },
+  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, fontSize: 12, color: '#6b7280', marginTop: 10 },
   pager: { display: 'flex', alignItems: 'center', gap: 8 },
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   modalBox: { background: '#fff', borderRadius: 12, padding: 24, width: 380, maxWidth: '90vw', direction: 'rtl', display: 'flex', flexDirection: 'column', gap: 10 },
