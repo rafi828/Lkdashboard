@@ -36,6 +36,7 @@
                         "מערכת" ("ניהול משתמשים") מוצג ל-Admin בלבד.
   MeContext.js        - useMe() / can(me, key) / <IfCan permission="..."> - הסתרת כפתורים לפי הרשאה.
                         Layout מקבל permission="targets.view" או adminOnly וחוסם עמוד שאין אליו הרשאה.
+  TrendCharts.js      - גרפי SVG משותפים לעמודי המגמות (LineChart / BarChart / Legend), ציר זמן מימין לשמאל.
   FileUploadGrid.js   - קומפוננטת טעינת קבצים משותפת (dropzones + "הועלה לאחרונה"), בשימוש
                         בשני עמודי ה-upload הייעודיים (ראה pages/dashboard/*-upload.js).
 /db
@@ -87,7 +88,13 @@
                                 בסוף הטבלה שורות "סיגנט ללא התאמה" (מק"טי מתחרה שלא משויכים לאף פריט ל.כ - מחושב במסך)
                                 עם כפתור "שיוך מק"ט ל.כ" (נשמר כהחלטה corrected על פריט ל.כ).
     sku-compare-upload.js     - עמוד טעינת קבצים: תוצאות כלי ההשוואה + "מרובי ברקודים" (ייצוא פריוריטי).
-    trends.js                 - "מגמות והיסטוריה" (קיים אך לא מקושר בתפריט הנוכחי - לבדוק אם רלוונטי).
+    trends.js                 - "מגמות – תקציב מול ביצוע" (targets.view). נפתח רק מכפתור "📈 מגמות" בדוח targets.js,
+                                עם כפתור חזרה. שנה/תחום/סוכן; בפועל מול יעד לפי חודש, השוואה לשנה קודמת,
+                                % השלמה מצטבר, טבלה חודשית.
+    quarterly-trends.js       - "מגמות – יעדים רבעוניים ללקוח" (quarterly.view). נפתח רק מכפתור "📈 מגמות" בדוח
+                                quarterly-targets.js, עם כפתור חזרה. אותם נתונים כמו הדוח (בלי API נוסף);
+                                סינון סוכן/לקוח; יעד מול בפועל לפי רבעון, לקוחות שעמדו ביעד, m1..m6 מול ממוצע שנה קודמת.
+                                ("השוואת מק"טים" - בכוונה בלי מגמות, החלטת רפי אוקטובר 2026.)
   /api
     login.js, logout.js, me.js, totp/confirm.js
     topics.js                          - GET נושאים גלויים למשתמש הנוכחי.
@@ -104,7 +111,7 @@
                                          ברקוד = מק"ט מתחרה -> שיוך. מחליף את כל sku_compare_imports.
     upload/status.js                   - GET "הועלה לאחרונה" לכל סוגי הקבצים (מ-file_uploads).
     dashboard/targets-summary.js       - נתוני "תקציב מול ביצוע" (מחושב, כולל diff/completion/contribution/profit[null]).
-    dashboard/trends.js                - נתוני "מגמות".
+    dashboard/trends.js                - נתוני מגמות "תקציב מול ביצוע": יעד+בפועל לכל חודש, לשנה שנבחרה ולקודמת (targets.view).
     dashboard/quarterly-targets.js     - GET נתוני יעדים רבעוניים (quarterly.view, מסונן לפי קוד סוכן).
     dashboard/quarterly-targets-export.js - POST ייצוא xlsx מותאם ל-Word Mail Merge (מקבל customerIds).
     dashboard/quarterly-targets-send.js   - POST שליחת מייל ישירה per-customer (SMTP - לא עובד עדיין).
@@ -247,7 +254,7 @@ sku_compare_imports (lk_sku PK, kind['sure'|'multi'], comp_sku, options, importe
 - ~~עדכון DB אוטומטי בעלייה (migrations)~~ - ✅ בוצע (`db/migrate.js`, רץ ב-`npm start`).
 - אופציה עתידית: מנהל מכירות שרואה רק את הסוכנים שמתחתיו (במקום הכל) - אם יידרש.
 - ניקוי: `users.agent_code`, `user_topic_access` - כבר לא בשימוש, למחוק רק באישור רפי אחרי שהמעבר יציב.
-- `pages/dashboard/trends.js` - לבדוק אם עדיין רלוונטי / איך מקושר בתפריט.
+- ~~`pages/dashboard/trends.js` - לבדוק אם רלוונטי~~ - ✅ הפך למגמות של "תקציב מול ביצוע" (+ quarterly-trends.js).
 - ~~לוודא ש-`pages/upload.js` הישן באמת הוסר מה-repo~~ - ✅ אומת.
 - לבדוק ולנקות את הקבצים הלא-מתועדים (ראה "קבצים שקיימים ב-repo ולא מתועדים" למעלה) - רק באישור רפי.
 

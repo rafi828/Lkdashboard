@@ -119,11 +119,16 @@ export default function QuarterlyTargetsPage() {
               : 'טרם הועלה קובץ יעדים רבעוניים'}
           </p>
         </div>
-        <IfCan permission="quarterly.upload">
-          <button onClick={() => router.push('/dashboard/quarterly-targets-upload')} style={styles.uploadBtn}>
-            📤 טעינת קבצים
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => router.push('/dashboard/quarterly-trends')} style={styles.uploadBtn}>
+            📈 מגמות
           </button>
-        </IfCan>
+          <IfCan permission="quarterly.upload">
+            <button onClick={() => router.push('/dashboard/quarterly-targets-upload')} style={styles.uploadBtn}>
+              📤 טעינת קבצים
+            </button>
+          </IfCan>
+        </div>
       </div>
 
       {error && <div style={styles.card}>{error}</div>}

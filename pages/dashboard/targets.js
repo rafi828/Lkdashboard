@@ -56,6 +56,9 @@ export default function TargetsDashboard() {
           <p style={styles.subtext}>ביצוע בפועל מול יעד, לפי תחום ולפי סוכן</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => router.push('/dashboard/trends')} style={styles.uploadBtn}>
+            📈 מגמות
+          </button>
           <IfCan permission="targets.upload">
             <button onClick={() => router.push('/dashboard/targets-upload')} style={styles.uploadBtn}>
               📤 טעינת קבצים
