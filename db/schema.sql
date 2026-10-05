@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS user_topic_access (
 INSERT INTO topics (key, name, sort_order) VALUES
   ('sales', 'מכירות', 1),
   ('procurement', 'רכש', 2),
-  ('warehouse', 'פעילות מחסן', 3)
+  ('warehouse', 'פעילות מחסן', 3),
+  ('sku-compare', 'השוואת מק"טים', 4)
 ON CONFLICT (key) DO NOTHING;
 
 -- ==========================================================
@@ -96,7 +97,7 @@ ON CONFLICT (key) DO NOTHING;
 -- מעקב אחרי הקובץ האחרון שהועלה לכל סוג טעינה (לתצוגת "הועלה לאחרונה" במסכי הטעינה)
 -- ==========================================================
 CREATE TABLE IF NOT EXISTS file_uploads (
-  file_key    VARCHAR(50) PRIMARY KEY,   -- 'classification' | 'targets' | 'matrix' | 'quarterly'
+  file_key    VARCHAR(50) PRIMARY KEY,   -- 'classification' | 'targets' | 'matrix' | 'quarterly' | 'sku-compare'
   filename    VARCHAR(255) NOT NULL,
   uploaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
   uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL
@@ -175,3 +176,30 @@ CREATE TABLE IF NOT EXISTS user_agent_codes (
 --   INNER JOIN subordinates s ON u.manager_id = s.id
 -- )
 -- SELECT id FROM subordinates;
+
+-- ==========================================================
+-- דוח "השוואת מק"טים" (ב-DB קיים: db/migrations/002-sku-compare.sql, רץ אוטומטית)
+-- ==========================================================
+-- תוצאות המנוע - מוחלפות במלואן בכל טעינת קובץ (שורה לכל פריט ל.כ)
+CREATE TABLE IF NOT EXISTS sku_compare_items (
+  lk_sku       VARCHAR(50) PRIMARY KEY,
+  lk_desc      TEXT,
+  lk_dept      VARCHAR(255),
+  comp_sku     VARCHAR(50),             -- מק"ט מתחרה שהמנוע הציע (ריק = ללא התאמה)
+  comp_desc    TEXT,
+  comp_brand   VARCHAR(100),
+  confidence   VARCHAR(20) NOT NULL,    -- 'ודאי' | 'סביר' | 'לבדיקה' | 'ללא התאמה'
+  notes        TEXT,
+  catalog_page INTEGER,
+  comp_price   NUMERIC(14,2)
+);
+
+-- החלטות ידניות - לא נמחקות בטעינת קובץ חדש, וגוברות על תוצאת המנוע
+CREATE TABLE IF NOT EXISTS sku_compare_decisions (
+  lk_sku        VARCHAR(50) PRIMARY KEY,
+  decision      VARCHAR(20) NOT NULL,   -- 'approved' | 'rejected' | 'corrected'
+  corrected_sku VARCHAR(50),            -- רק כש-decision = 'corrected'
+  note          TEXT,
+  decided_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  decided_at    TIMESTAMP NOT NULL DEFAULT NOW()
+);

@@ -59,6 +59,7 @@
   file-uploads.js       - recordFileUpload(fileKey, filename, userId) - שומר "הועלה לאחרונה" בטבלת file_uploads.
   mailer.js             - עטיפת nodemailer סביב SMTP. **לא עובד כרגע** - ראה "בעיה פתוחה: SMTP".
   quarterly-email-template.js - בונה HTML למייל סטטוס יעד רבעוני ללקוח (משמש את quarterly-targets-send.js).
+  sku-compare.js        - getSkuCompareRows(lkSkus?) - שורות "השוואת מק"טים": תוצאת מנוע + החלטה ידנית (JOIN).
 /pages
   login.js            - התחברות: אימייל+סיסמה -> קוד Google Authenticator. בכניסה ראשונה: QR + הסבר שלב-אחר-שלב.
                         השם באפליקציה ("דשבורד ל.כ") מוגדר ב-ISSUER ב-lib/totp.js (משפיע רק על סריקות חדשות).
@@ -76,6 +77,10 @@
                                 "ייצוא לשליחת מייל" (Word Mail Merge) ו"שליחת מייל" (ישיר, ראה SMTP).
     targets-upload.js         - עמוד טעינת קבצים ייעודי ל"תקציב מול ביצוע" (3 dropzones).
     quarterly-targets-upload.js - עמוד טעינת קבצים ייעודי ל"יעדים רבעוניים" (dropzone בודד).
+    sku-compare.js            - דשבורד "השוואת מק"טים" (skucompare.view). כרטיסים, סינון, טבלה ממוינת בעמודים של 100,
+                                כפתורי אישור/דחייה/תיקון (skucompare.decide), צ'קבוקס לכל שורה (נשמר בין חיפושים,
+                                נמחק ביציאה מהמסך), "הצג מסומנים בלבד", ייצוא לאקסל (מסומנים, או כל מה שמוצג אם לא סומן כלום).
+    sku-compare-upload.js     - עמוד טעינת קובץ התוצאות של כלי ההשוואה (dropzone בודד).
     trends.js                 - "מגמות והיסטוריה" (קיים אך לא מקושר בתפריט הנוכחי - לבדוק אם רלוונטי).
   /api
     login.js, logout.js, me.js, totp/confirm.js
@@ -87,12 +92,19 @@
     upload/targets.js                  - טעינת קובץ יעדים חודשיים (מבוסס כותרת "קוד סוכן" + שמות חודשים).
     upload/sales-matrix.js             - טעינת מטריצת מכירות חודשית (מבוסס כותרת "סוכן" + MM/YYYY).
     upload/quarterly-targets.js        - טעינת קובץ יעדים רבעוניים ללקוח (מבוסס כותרות מדויקות).
+    upload/sku-compare.js              - טעינת קובץ תוצאות ההשוואה (גיליונות "התאמות" + "ל.כ ללא התאמה", לפי כותרות).
+                                         מחליף את כל sku_compare_items; לא נוגע ב-sku_compare_decisions.
     upload/status.js                   - GET "הועלה לאחרונה" לכל סוגי הקבצים (מ-file_uploads).
     dashboard/targets-summary.js       - נתוני "תקציב מול ביצוע" (מחושב, כולל diff/completion/contribution/profit[null]).
     dashboard/trends.js                - נתוני "מגמות".
     dashboard/quarterly-targets.js     - GET נתוני יעדים רבעוניים (quarterly.view, מסונן לפי קוד סוכן).
     dashboard/quarterly-targets-export.js - POST ייצוא xlsx מותאם ל-Word Mail Merge (מקבל customerIds).
     dashboard/quarterly-targets-send.js   - POST שליחת מייל ישירה per-customer (SMTP - לא עובד עדיין).
+    dashboard/sku-compare.js              - GET נתוני "השוואת מק"טים" + פרטי הקובץ האחרון.
+    dashboard/sku-compare-decision.js     - POST החלטה ידנית לפריט (approved/rejected/corrected, null = ביטול).
+    dashboard/sku-compare-export.js       - POST ייצוא xlsx (מקבל lkSkus), כולל מק"ט סופי אחרי החלטות.
+/tools/signet-matching  - כלי פייתון (לא חלק מהאתר) שמייצר את קובץ ההשוואה. ראה README שם.
+                          input/ work/ output/ לא נשמרים ב-Git (קטלוג החברה + קבצים זמניים).
 /public/logos
   lc-logo.png, roher-logo.png
 ```
@@ -133,7 +145,12 @@ customer_quarterly_targets (
   UNIQUE(customer_id, year)
 )
 
-file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], filename, uploaded_at, uploaded_by)
+file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'|'sku-compare'], filename, uploaded_at, uploaded_by)
+
+sku_compare_items (lk_sku PK, lk_desc, lk_dept, comp_sku, comp_desc, comp_brand,
+                   confidence['ודאי'|'סביר'|'לבדיקה'|'ללא התאמה'], notes, catalog_page, comp_price)  -- מוחלף בכל טעינה
+sku_compare_decisions (lk_sku PK, decision['approved'|'rejected'|'corrected'], corrected_sku, note,
+                       decided_by, decided_at)                            -- לא נמחק בטעינה, גובר על תוצאת המנוע
 ```
 
 ### ⚠️ עקרון קריטי: שינוי סכימה = קובץ migration חדש (אוטומטי מאוקטובר 2026)
@@ -163,7 +180,8 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 ## הרשאות (permissions) - תבניות + חריגים (אוקטובר 2026)
 - **מה מותר (אילו דוחות/פעולות):** לכל משתמש תבנית הרשאה (`permission_templates`), ומעליה חריגים אישיים
   (`user_permission_overrides`: הוסף/הסר). מפתחות ההרשאה מוגדרים ב-`lib/reports.js`:
-  `targets.view`, `targets.upload`, `quarterly.view`, `quarterly.upload`, `quarterly.email`. Admin = הכל אוטומטית.
+  `targets.view`, `targets.upload`, `quarterly.view`, `quarterly.upload`, `quarterly.email`,
+  `skucompare.view`, `skucompare.upload`, `skucompare.decide`. Admin = הכל אוטומטית.
 - **מה רואים בתוך הדוח (`getDataScope`):** Admin ומנהל מכירות (`manager`) = כל הנתונים. סוכן (`user`) = רק
   קודי הסוכן שלו (`user_agent_codes`, יכולים להיות כמה). ב"תקציב מול ביצוע" לפי agent_code, וב"יעדים רבעוניים"
   לפי `customer_quarterly_targets.agent_code` (עמודה "קוד סוכן מלקוח - 2" בקובץ). `manager_id` כבר לא משפיע על נתונים.
@@ -211,6 +229,9 @@ file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'], file
 ---
 
 ## עוד לעשות / פתוח
+- "השוואת מק"טים": שלב 3 - ייצוא ההחלטות ל-`tools/signet-matching/input/overrides.xlsx` שהמנוע יחיל בהרצה הבאה.
+  רפי ציין שירצה לעדכן גם את מבנה קובץ האקסל של ההשוואה - אם משנים שמות עמודות, לעדכן את
+  `SKU_MATCH_COLUMNS` / `SKU_UNMATCHED_COLUMNS` ב-`lib/xlsx-parser.js` (יש שם כבר שמות חלופיים).
 - לעבור מ-SMTP ל-Resend לשליחת מייל אמיתית (`lib/mailer.js`).
 - ~~דוח "יעדים רבעוניים ללקוח" - הרשאות מעבר ל-admin-only~~ - ✅ בוצע (תבניות + חריגים, קוד סוכן מהקובץ).
 - ~~עדכון DB אוטומטי בעלייה (migrations)~~ - ✅ בוצע (`db/migrate.js`, רץ ב-`npm start`).
