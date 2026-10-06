@@ -7,6 +7,7 @@ const SOURCE_LABELS = { engine: 'מנוע ההשוואה', barcodes: 'מרובי
 
 // POST { lkSkus: [...], compSkus: [...] } - השורות לייצוא (המסומנות, או כל מה שמוצג בטבלה כשלא סומן כלום).
 // compSkus = שורות "סיגנט ללא התאמה" (פריט מתחרה בלי פריט ל.כ).
+// quantities = { lk_sku | 'sig:'+comp_sku: כמות } - מ"חיפוש לפי מסמך"; אם נשלח, נוספת עמודת "כמות במסמך".
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = await requirePermission(req, res, 'skucompare.view');
@@ -14,6 +15,8 @@ export default async function handler(req, res) {
 
   const lkSkus = Array.isArray(req.body?.lkSkus) ? req.body.lkSkus.map(String) : [];
   const compSkus = Array.isArray(req.body?.compSkus) ? req.body.compSkus.map(String) : [];
+  const quantities = req.body?.quantities && typeof req.body.quantities === 'object' ? req.body.quantities : null;
+  const withQty = (key, row) => (quantities ? { 'כמות במסמך': quantities[key] ?? '', ...row } : row);
   if (lkSkus.length === 0 && compSkus.length === 0) {
     return res.status(400).json({ error: 'אין שורות לייצוא' });
   }
@@ -27,7 +30,7 @@ export default async function handler(req, res) {
     )
     : { rows: [] };
 
-  const exportRows = rows.map((r) => ({
+  const exportRows = rows.map((r) => withQty(r.lk_sku, {
     'מק"ט ל.כ': r.lk_sku,
     'תיאור ל.כ': r.lk_desc || '',
     'מחלקה': r.lk_dept || '',
@@ -43,7 +46,7 @@ export default async function handler(req, res) {
     'הערות': r.notes || '',
     'עמוד בקטלוג': r.catalog_page || '',
     'מחיר מחירון מתחרה (₪)': r.comp_price ?? '',
-  })).concat(compRows.map((c) => ({
+  })).concat(compRows.map((c) => withQty(`sig:${c.comp_sku}`, {
     'מק"ט ל.כ': '',
     'תיאור ל.כ': '',
     'מחלקה': '',
@@ -62,7 +65,7 @@ export default async function handler(req, res) {
   })));
 
   const ws = XLSX.utils.json_to_sheet(exportRows);
-  ws['!cols'] = [12, 40, 22, 16, 16, 40, 10, 14, 14, 10, 24, 12, 40, 10, 12].map((wch) => ({ wch }));
+  ws['!cols'] = (quantities ? [10] : []).concat([12, 40, 22, 16, 16, 40, 10, 14, 14, 10, 24, 12, 40, 10, 12]).map((wch) => ({ wch }));
   const wb = XLSX.utils.book_new();
   wb.Workbook = { Views: [{ RTL: true }] };
   XLSX.utils.book_append_sheet(wb, ws, 'השוואת מק"טים');
