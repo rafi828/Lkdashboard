@@ -29,7 +29,7 @@ const IMPORT_STYLE = '#0d9488';
 const COLUMNS = [
   ['lk_sku', 'מק"ט ל.כ'], ['lk_desc', 'תיאור ל.כ'], ['lk_dept', 'מחלקה'], ['comp_sku', 'מק"ט מתחרה'],
   ['comp_desc', 'תיאור מתחרה'], ['comp_brand', 'מותג'], ['confidence', 'רמת ביטחון'], ['notes', 'הערות'],
-  ['catalog_page', 'עמוד'], ['comp_price', 'מחיר מחירון'],
+  ['catalog_page', 'עמוד'], ['comp_price', 'מחיר'],
 ];
 
 function fmtDate(iso) {
@@ -77,6 +77,9 @@ function SkuCompare() {
   const [fixRow, setFixRow] = useState(null);
   const [assignRow, setAssignRow] = useState(null);
   const [exporting, setExporting] = useState(false);
+  // "חיפוש לפי מסמך" - זמני (לא נשמר): { filename, mode, total, foundLk, foundComp, unknown: [...], qty: {key: n}, hit: {key: 'lk'|'comp'} }
+  const [lookup, setLookup] = useState(null);
+  const [lookupOpen, setLookupOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/dashboard/sku-compare')
@@ -186,6 +189,69 @@ function SkuCompare() {
     setOnlyMarked(false);
   }
 
+  // "חיפוש לפי מסמך": השרת רק קורא את הקובץ; ההתאמה מול הדוח נעשית כאן (כולל החלטות ושיוכים עדכניים).
+  // מק"ט ל.כ -> השורה שלו. מק"ט מתחרה -> שורת ל.כ שמשויכת אליו כרגע, ואם אין - שורת "סיגנט ללא התאמה".
+  async function runLookup(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/dashboard/sku-compare-lookup', { method: 'POST', body: formData });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return data.error || 'שגיאה בקריאת הקובץ';
+
+    const lkByNorm = new Map(rows.map((r) => [normSku(r.lk_sku), r.lk_sku]));
+    const lkByComp = new Map();
+    rows.forEach((r) => {
+      const sku = effectiveSku(r);
+      if (!sku) return;
+      const list = lkByComp.get(normSku(sku)) || [];
+      list.push(r.lk_sku);
+      lkByComp.set(normSku(sku), list);
+    });
+    const sigByNorm = new Map(allRows.filter((r) => r.isSig).map((r) => [normSku(r.comp_sku), r.key]));
+
+    const qty = {};
+    const hit = {};
+    const unknown = [];
+    const add = (key, how, q) => {
+      hit[key] = hit[key] || how;
+      if (q != null) qty[key] = (qty[key] || 0) + q;
+      else if (!(key in qty)) qty[key] = null;
+    };
+    data.lines.forEach((line) => {
+      const n = line.code ? normSku(line.code) : null;
+      if (n && lkByNorm.has(n)) add(lkByNorm.get(n), 'lk', line.qty);
+      else if (n && lkByComp.has(n)) lkByComp.get(n).forEach((k) => add(k, 'comp', line.qty));
+      else if (n && sigByNorm.has(n)) add(sigByNorm.get(n), 'comp', line.qty);
+      else unknown.push(line);
+    });
+    const keys = Object.keys(hit);
+    setLookup({
+      filename: data.filename,
+      mode: data.mode,
+      total: data.lines.length,
+      foundLk: keys.filter((k) => hit[k] === 'lk').length,
+      foundComp: keys.filter((k) => hit[k] === 'comp').length,
+      unknown,
+      qty,
+      hit,
+    });
+    setSearch(''); setDept(''); setConfidence(''); setSource(''); setDecisionFilter(''); setSortKey(null);
+    setMarked(new Set(keys));
+    setOnlyMarked(keys.length > 0);
+    return null;
+  }
+
+  function closeLookup() {
+    setLookup(null);
+    clearMarks();
+  }
+
+  // שורה שלא זוהתה -> חיפוש חופשי לפי תחילת התיאור, על כל הטבלה
+  function searchByDesc(desc) {
+    setOnlyMarked(false);
+    setSearch(String(desc).split(/\s+/).slice(0, 2).join(' '));
+  }
+
   function resetFilters() {
     setSearch(''); setDept(''); setConfidence(''); setSource(''); setDecisionFilter(''); setOnlyMarked(false); setSortKey(null);
   }
@@ -238,7 +304,10 @@ function SkuCompare() {
       const res = await fetch('/api/dashboard/sku-compare-export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lkSkus, compSkus }),
+        body: JSON.stringify({
+          lkSkus, compSkus,
+          quantities: lookup ? Object.fromEntries(keys.map((k) => [k, lookup.qty[k] ?? null])) : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -259,7 +328,8 @@ function SkuCompare() {
     }
   }
 
-  const exportLabel = marked.size > 0 ? `ייצוא ${marked.size} מסומנים לאקסל` : `ייצוא לאקסל (${filtered.length.toLocaleString('he-IL')} שורות)`;
+  const exportLabel = (marked.size > 0 ? `ייצוא ${marked.size} מסומנים לאקסל` : `ייצוא לאקסל (${filtered.length.toLocaleString('he-IL')} שורות)`)
+    + (lookup ? ' (כולל כמות)' : '');
 
   return (
     <div style={styles.page}>
@@ -273,11 +343,16 @@ function SkuCompare() {
             {lastBarcodes && ` · מרובי ברקודים: ${lastBarcodes.filename} (${fmtDate(lastBarcodes.uploaded_at)})`}
           </p>
         </div>
-        <IfCan permission="skucompare.upload">
-          <button onClick={() => router.push('/dashboard/sku-compare-upload')} style={styles.uploadBtn}>
-            ⬆ טעינת קבצים
-          </button>
-        </IfCan>
+        <div style={styles.headerBtns}>
+          {rows.length > 0 && (
+            <button onClick={() => setLookupOpen(true)} style={styles.uploadBtn}>🔍 חיפוש לפי מסמך</button>
+          )}
+          <IfCan permission="skucompare.upload">
+            <button onClick={() => router.push('/dashboard/sku-compare-upload')} style={styles.uploadBtn}>
+              ⬆ טעינת קבצים
+            </button>
+          </IfCan>
+        </div>
       </div>
 
       {error && <div style={styles.card}>{error}</div>}
@@ -301,6 +376,10 @@ function SkuCompare() {
               <span style={styles.kpiValue}>{counts.pending.toLocaleString('he-IL')}</span>
             </button>
           </div>
+
+          {lookup && (
+            <LookupPanel lookup={lookup} onShowAll={() => setOnlyMarked(false)} onClose={closeLookup} onSearch={searchByDesc} />
+          )}
 
           <div style={styles.card}>
             <div style={styles.filters}>
@@ -347,6 +426,7 @@ function SkuCompare() {
                     <th style={styles.thCheck}>
                       <input type="checkbox" checked={allPageMarked} onChange={togglePageMarks} title="סימון כל השורות בעמוד" />
                     </th>
+                    {lookup && <th style={{ ...styles.th, ...styles.thQty }} title="כמות במסמך">כמות</th>}
                     {COLUMNS.map(([k, label]) => (
                       <th key={k} style={styles.th} onClick={() => toggleSort(k)}>
                         {label} <span style={styles.arrow}>{sortKey === k ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
@@ -358,13 +438,13 @@ function SkuCompare() {
                 <tbody>
                   {pageRows.map((r) => (r.isSig ? (
                     <SigRow key={r.key} r={r} marked={marked.has(r.key)} onMark={() => toggleMark(r.key)}
-                      canDecide={canDecide} onAssign={() => setAssignRow(r)} />
+                      canDecide={canDecide} onAssign={() => setAssignRow(r)} lookup={lookup} />
                   ) : (
                     <Row key={r.key} r={r} marked={marked.has(r.key)} onMark={() => toggleMark(r.key)}
-                      canDecide={canDecide} onDecide={saveDecision} onFix={() => setFixRow(r)} />
+                      canDecide={canDecide} onDecide={saveDecision} onFix={() => setFixRow(r)} lookup={lookup} />
                   )))}
                   {pageRows.length === 0 && (
-                    <tr><td colSpan={COLUMNS.length + 2} style={styles.empty}>אין שורות שמתאימות לסינון</td></tr>
+                    <tr><td colSpan={COLUMNS.length + (lookup ? 3 : 2)} style={styles.empty}>אין שורות שמתאימות לסינון</td></tr>
                   )}
                 </tbody>
               </table>
@@ -392,28 +472,43 @@ function SkuCompare() {
         onSave={async (sku, note) => { if (await saveDecision(fixRow.lk_sku, 'corrected', sku, note)) setFixRow(null); }} />}
       {assignRow && <AssignModal row={assignRow} onClose={() => setAssignRow(null)}
         onSave={async (lkSku, note) => { if (await assignLk(assignRow, lkSku, note)) setAssignRow(null); }} />}
+      {lookupOpen && <LookupModal onClose={() => setLookupOpen(false)}
+        onFile={async (file) => { const err = await runLookup(file); if (!err) setLookupOpen(false); return err; }} />}
     </div>
   );
 }
 
-function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
+// עמודת "כמות במסמך" (רק בזמן "חיפוש לפי מסמך")
+function QtyCell({ lookup, rowKey }) {
+  if (!lookup) return null;
+  const q = lookup.qty[rowKey];
+  return <td style={{ ...styles.td, ...styles.qty }}>{q ?? ''}</td>;
+}
+
+// מק"ט שנמצא בחיפוש לפי מסמך - מודגש
+const hitSku = (lookup, rowKey, how, text) => (
+  lookup && lookup.hit[rowKey] === how ? <span style={{ ...styles.sku, ...styles.hit }}>{text}</span> : <span style={styles.sku}>{text}</span>
+);
+
+function Row({ r, marked, onMark, canDecide, onDecide, onFix, lookup }) {
   const conf = CONF_STYLE[r.confidence] || CONF_STYLE['לבדיקה'];
   const noMatch = !r.comp_sku;
   return (
     <tr style={{ ...(r.decision === 'rejected' ? { opacity: 0.55 } : {}), ...(marked ? { background: '#fffbeb' } : {}) }}>
       <td style={styles.tdCheck}><input type="checkbox" checked={marked} onChange={onMark} /></td>
-      <td style={{ ...styles.td, ...styles.sku }}>{r.lk_sku}</td>
+      <QtyCell lookup={lookup} rowKey={r.key} />
+      <td style={styles.td}>{hitSku(lookup, r.key, 'lk', r.lk_sku)}</td>
       <td style={styles.tdWide}>{r.lk_desc}</td>
       <td style={styles.tdMid}>{r.lk_dept}</td>
       <td style={styles.td}>
         {r.decision === 'corrected' ? (
           <>
-            <span style={styles.sku}>{r.corrected_sku}</span>
+            {hitSku(lookup, r.key, 'comp', r.corrected_sku)}
             {r.comp_sku && <span style={styles.orig}>{r.comp_sku} ({r.source === 'barcodes' ? 'ברקודים' : 'מנוע'})</span>}
           </>
         ) : (
           <>
-            <span style={styles.sku}>{r.comp_sku}</span>
+            {hitSku(lookup, r.key, 'comp', r.comp_sku)}
             {r.source === 'barcodes' && r.engine_comp_sku && normSku(r.engine_comp_sku) !== normSku(r.comp_sku)
               && <span style={styles.orig}>{r.engine_comp_sku} (מנוע)</span>}
           </>
@@ -433,11 +528,12 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
       <td style={styles.td}>
         {r.decision ? (
           <div style={styles.actions}>
-            <span style={{ ...styles.badge, background: DECISION_STYLE[r.decision], color: '#fff' }}>{DECISION_LABELS[r.decision]}</span>
-            {canDecide && <button onClick={() => onDecide(r.lk_sku, null)} style={{ ...styles.act, ...styles.actUndo }}>ביטול</button>}
-            <span style={styles.who} title={r.decision_note || ''}>
-              {[r.decided_by_name, fmtDate(r.decided_at)].filter(Boolean).join(' · ')}{r.decision_note ? ' · 💬' : ''}
+            {/* מי החליט ומתי (והערה) - במעבר עכבר, כדי שהעמודה תישאר צרה */}
+            <span style={{ ...styles.badge, background: DECISION_STYLE[r.decision], color: '#fff', cursor: 'help' }}
+              title={[[r.decided_by_name, fmtDate(r.decided_at)].filter(Boolean).join(' · '), r.decision_note].filter(Boolean).join('\n')}>
+              {DECISION_LABELS[r.decision]}{r.decision_note ? ' 💬' : ''}
             </span>
+            {canDecide && <button onClick={() => onDecide(r.lk_sku, null)} style={{ ...styles.act, ...styles.actUndo }}>ביטול</button>}
           </div>
         ) : r.import_kind === 'sure' ? (
           <div style={styles.actions}>
@@ -458,18 +554,19 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix }) {
 }
 
 // שורת "סיגנט ללא התאמה": פריט מתחרה שאין לו פריט ל.כ משויך
-function SigRow({ r, marked, onMark, canDecide, onAssign }) {
+function SigRow({ r, marked, onMark, canDecide, onAssign, lookup }) {
   const conf = CONF_STYLE[SIG];
   return (
     <tr style={{ background: marked ? '#fffbeb' : '#fafafa' }}>
       <td style={styles.tdCheck}><input type="checkbox" checked={marked} onChange={onMark} /></td>
+      <QtyCell lookup={lookup} rowKey={r.key} />
       <td style={{ ...styles.td, color: '#9ca3af' }}>—</td>
       <td style={styles.tdWide} />
       <td style={styles.tdMid}>{r.category}</td>
-      <td style={styles.td}><span style={styles.sku}>{r.comp_sku}</span></td>
+      <td style={styles.td}>{hitSku(lookup, r.key, 'comp', r.comp_sku)}</td>
       <td style={styles.tdWide}>{r.comp_desc}</td>
       <td style={styles.td}>{r.comp_brand}</td>
-      <td style={styles.td}><span style={{ ...styles.badge, background: conf.background, color: conf.color }}>{SIG}</span></td>
+      <td style={styles.td}><span style={{ ...styles.badge, ...styles.badgeWrap, background: conf.background, color: conf.color }}>{SIG}</span></td>
       <td style={styles.tdNote} />
       <td style={styles.td}>
         {r.catalog_page && <a href={`${CATALOG_URL}${r.catalog_page}/`} target="_blank" rel="noreferrer" style={styles.pageLink}>עמ' {r.catalog_page} ↗</a>}
@@ -480,6 +577,91 @@ function SigRow({ r, marked, onMark, canDecide, onAssign }) {
           : <span style={{ color: '#9ca3af' }}>—</span>}
       </td>
     </tr>
+  );
+}
+
+// מסגרת התוצאה של "חיפוש לפי מסמך": סיכום + שורות שלא זוהו
+function LookupPanel({ lookup, onShowAll, onClose, onSearch }) {
+  const n = (x) => x.toLocaleString('he-IL');
+  const found = lookup.foundLk + lookup.foundComp;
+  const listUnknown = lookup.mode === 'columns' && lookup.unknown.length > 0;
+  return (
+    <div style={styles.lookupPanel}>
+      <div style={styles.lookupTop}>
+        <span style={styles.lookupTitle}>📄 {lookup.filename}</span>
+        <span style={styles.lookupStat}>
+          {lookup.mode === 'columns' ? `נקראו ${n(lookup.total)} שורות` : `נבדקו ${n(lookup.total)} תאים שנראים כמו מק"ט`}
+          {` · נמצאו ${n(found)} (${n(lookup.foundLk)} לפי מק"ט ל.כ · ${n(lookup.foundComp)} לפי מק"ט מתחרה)`}
+          {lookup.mode === 'columns' && <> · לא זוהו <b style={{ color: '#b45309' }}>{n(lookup.unknown.length)}</b></>}
+        </span>
+        <span style={styles.lookupBtns}>
+          <button onClick={onShowAll} style={styles.resetBtn}>הצג את כל הטבלה</button>
+          <button onClick={onClose} style={styles.resetBtn}>✕ סגירת החיפוש</button>
+        </span>
+      </div>
+      {lookup.mode === 'scan' && (
+        <div style={styles.lookupHint}>לא נמצאה בקובץ עמודת מק"ט (כותרת "מק"ט" / "קוד" / "פריט"), לכן נבדק כל תא שנראה כמו מק"ט - ואין רשימת "לא זוהו".</div>
+      )}
+      {listUnknown && (
+        <div style={styles.unknownBox}>
+          <div style={styles.unknownTitle}>⚠ שורות מהמסמך שלא זוהו בדוח</div>
+          <div style={{ maxHeight: 180, overflow: 'auto' }}>
+            <table style={styles.unknownTable}>
+              <thead>
+                <tr><th style={styles.unknownTh}>מק"ט במסמך</th><th style={styles.unknownTh}>תיאור במסמך</th><th style={styles.unknownTh}>כמות</th><th style={styles.unknownTh} /></tr>
+              </thead>
+              <tbody>
+                {lookup.unknown.map((u, i) => (
+                  <tr key={i}>
+                    <td style={styles.unknownTd}>{u.code ? <span style={styles.sku}>{u.code}</span> : <span style={{ color: '#9ca3af' }}>— אין מק"ט —</span>}</td>
+                    <td style={styles.unknownTd}>{u.desc}</td>
+                    <td style={{ ...styles.unknownTd, textAlign: 'center' }}>{u.qty ?? ''}</td>
+                    <td style={styles.unknownTd}>
+                      {u.desc && <button onClick={() => onSearch(u.desc)} style={{ ...styles.act, ...styles.actUndo }}>🔎 חפש בטבלה לפי התיאור</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LookupModal({ onClose, onFile }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function handle(file) {
+    if (!file) return;
+    setBusy(true); setError('');
+    const err = await onFile(file);
+    setBusy(false);
+    if (err) setError(err);
+  }
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={{ ...styles.modalBox, width: 460 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>🔍 חיפוש לפי מסמך</h3>
+        <label style={styles.lookupDrop}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); handle(e.dataTransfer.files[0]); }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{busy ? 'קורא את הקובץ…' : 'גרירה או לחיצה לבחירת קובץ'}</span>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>אקסל (xlsx / xls) או CSV</span>
+          <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} disabled={busy}
+            onChange={(e) => handle(e.target.files[0])} />
+        </label>
+        {error && <div style={{ fontSize: 12.5, fontWeight: 600, color: '#dc2626' }}>{error}</div>}
+        <div style={styles.lookupNote}>
+          המערכת מחפשת בקובץ <b>מק"טים של ל.כ ושל המתחרה</b> (בלי תלות באפסים בהתחלה):<br />
+          • אם יש שורת כותרות עם עמודה כמו <b>"מק"ט" / "קוד" / "פריט"</b> - נקראת העמודה הזו, וגם <b>"תיאור"/"שם"</b> ו<b>"כמות"</b> אם קיימות.<br />
+          • אם אין כותרות - נבדק כל תא שנראה כמו מק"ט.<br />
+          השורות שנמצאו <b>מסומנות</b> ומוצגות לבד, עם עמודת <b>"כמות במסמך"</b>. החיפוש זמני - נמחק ביציאה מהמסך.
+        </div>
+        <div><button onClick={onClose} style={styles.resetBtn}>ביטול</button></div>
+      </div>
+    </div>
   );
 }
 
@@ -531,6 +713,23 @@ function FixModal({ row, onClose, onSave }) {
 const styles = {
   page: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: -12 },
   headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  headerBtns: { display: 'flex', gap: 8, flexShrink: 0 },
+  qty: { fontWeight: 700, color: '#0f766e', textAlign: 'center', padding: '5px 4px' },
+  thQty: { cursor: 'default', padding: '7px 4px', color: '#0f766e' },
+  hit: { background: '#99f6e4', borderRadius: 4, padding: '0 3px' },
+  lookupPanel: { background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 },
+  lookupTop: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  lookupTitle: { fontWeight: 700, fontSize: 14, color: '#0f766e' },
+  lookupStat: { fontSize: 12.5, color: '#134e4a' },
+  lookupBtns: { marginInlineStart: 'auto', display: 'flex', gap: 6 },
+  lookupHint: { fontSize: 12, color: '#6b7280' },
+  unknownBox: { background: '#fff', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 12px' },
+  unknownTitle: { fontSize: 12.5, fontWeight: 700, color: '#92400e', marginBottom: 6 },
+  unknownTable: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+  unknownTh: { textAlign: 'right', padding: '3px 8px', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #fef3c7' },
+  unknownTd: { textAlign: 'right', padding: '3px 8px', borderBottom: '1px solid #fef3c7' },
+  lookupDrop: { border: '2px dashed #d1d5db', borderRadius: 12, padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer' },
+  lookupNote: { background: '#f9fafb', border: '1px solid #f0f0f0', borderRadius: 8, padding: '10px 12px', fontSize: 11.5, color: '#4b5563', lineHeight: 1.7 },
   h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#111827' },
   subtext: { margin: '2px 0 0', fontSize: 12.5, color: '#6b7280' },
   card: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 12, padding: '14px 16px' },
@@ -557,20 +756,20 @@ const styles = {
   tdCheck: { padding: '5px 6px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top' },
   tdWide: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 110, maxWidth: 200 },
   tdMid: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 70, maxWidth: 100 },
-  tdNote: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 100, maxWidth: 150, color: '#6b7280', fontSize: 11 },
+  tdNote: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 80, maxWidth: 150, color: '#6b7280', fontSize: 11 },
   sku: { fontFamily: 'Consolas, monospace', fontWeight: 700 },
   orig: { display: 'block', textDecoration: 'line-through', color: '#9ca3af', fontSize: 11, fontWeight: 400 },
+  badgeWrap: { display: 'inline-block', whiteSpace: 'normal', maxWidth: 70, lineHeight: 1.3, textAlign: 'center' },
   badge: { fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 10, whiteSpace: 'nowrap' },
   pageLink: { color: '#dc2626', fontWeight: 700, textDecoration: 'none' },
-  actions: { display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' },
-  act: { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 6px', lineHeight: '16px', cursor: 'pointer', border: '1px solid', background: '#fff' },
+  actions: { display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' },
+  act: { flexShrink: 0, whiteSpace: 'nowrap', fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 6px', lineHeight: '16px', cursor: 'pointer', border: '1px solid', background: '#fff' },
   actOk: { color: '#15803d', borderColor: '#86efac' },
   actRej: { color: '#b91c1c', borderColor: '#fca5a5' },
   actFix: { color: '#7c3aed', borderColor: '#c4b5fd' },
   actLink: { color: '#0f766e', borderColor: '#5eead4' },
   chip: { display: 'block', width: 'fit-content', marginTop: 3, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: '#ccfbf1', color: '#0f766e' },
   actUndo: { color: '#6b7280', borderColor: '#d1d5db' },
-  who: { fontSize: 10.5, color: '#9ca3af' },
   empty: { textAlign: 'center', color: '#9ca3af', padding: 24 },
   footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, fontSize: 12, color: '#6b7280', marginTop: 10 },
   pager: { display: 'flex', alignItems: 'center', gap: 8 },

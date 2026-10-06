@@ -87,6 +87,9 @@
                                 ריבועים נפרדים "לבדיקה – מנוע" / "לבדיקה – מרובי ברקודים", סינון "מקור", החלטה "יבוא ידני".
                                 בסוף הטבלה שורות "סיגנט ללא התאמה" (מק"טי מתחרה שלא משויכים לאף פריט ל.כ - מחושב במסך)
                                 עם כפתור "שיוך מק"ט ל.כ" (נשמר כהחלטה corrected על פריט ל.כ).
+                                כפתור "🔍 חיפוש לפי מסמך" (כל מי שרואה את הדוח): קובץ אקסל/CSV (בקשה להצעת מחיר וכו') ->
+                                מסמן את השורות שהמק"טים שלהן (ל.כ או מתחרה) מופיעים בקובץ, עמודת "כמות", רשימת "לא זוהו".
+                                זמני - לא נשמר. ההתאמה נעשית במסך (normSku); השרת רק קורא את הקובץ.
     sku-compare-upload.js     - עמוד טעינת קבצים: תוצאות כלי ההשוואה + "מרובי ברקודים" (ייצוא פריוריטי).
     trends.js                 - "מגמות – תקציב מול ביצוע" (targets.view). נפתח רק מכפתור "📈 מגמות" בדוח targets.js,
                                 עם כפתור חזרה. שנה/תחום/סוכן; בפועל מול יעד לפי חודש, השוואה לשנה קודמת,
@@ -117,7 +120,8 @@
     dashboard/quarterly-targets-send.js   - POST שליחת מייל ישירה per-customer (SMTP - לא עובד עדיין).
     dashboard/sku-compare.js              - GET נתוני "השוואת מק"טים" + פרטי הקובץ האחרון.
     dashboard/sku-compare-decision.js     - POST החלטה ידנית לפריט (approved/rejected/corrected, null = ביטול).
-    dashboard/sku-compare-export.js       - POST ייצוא xlsx (מקבל lkSkus), כולל מק"ט סופי אחרי החלטות.
+    dashboard/sku-compare-export.js       - POST ייצוא xlsx (lkSkus, compSkus, quantities?), כולל מק"ט סופי אחרי החלטות.
+    dashboard/sku-compare-lookup.js       - POST "חיפוש לפי מסמך": parseSkuLookupFile -> שורות {code, desc, qty}. לא שומר כלום.
 /tools/signet-matching  - כלי פייתון (לא חלק מהאתר) שמייצר את קובץ ההשוואה. ראה README שם.
                           input/ work/ output/ לא נשמרים ב-Git (קטלוג החברה + קבצים זמניים).
 /public/logos
