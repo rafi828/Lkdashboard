@@ -97,7 +97,7 @@ ON CONFLICT (key) DO NOTHING;
 -- מעקב אחרי הקובץ האחרון שהועלה לכל סוג טעינה (לתצוגת "הועלה לאחרונה" במסכי הטעינה)
 -- ==========================================================
 CREATE TABLE IF NOT EXISTS file_uploads (
-  file_key    VARCHAR(50) PRIMARY KEY,   -- 'classification' | 'targets' | 'matrix' | 'quarterly' | 'sku-compare' | 'sku-barcodes'
+  file_key    VARCHAR(50) PRIMARY KEY,   -- 'classification' | 'targets' | 'matrix' | 'quarterly' | 'sku-compare' | 'sku-barcodes' | 'customers' | 'customer-sales'
   filename    VARCHAR(255) NOT NULL,
   uploaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
   uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL
@@ -226,3 +226,30 @@ CREATE TABLE IF NOT EXISTS sku_compare_imports (
   imported_at TIMESTAMP NOT NULL DEFAULT NOW(),
   imported_by INTEGER REFERENCES users(id) ON DELETE SET NULL
 );
+
+-- ==========================================================
+-- דוח "מכירות ללקוח" (ב-DB קיים: db/migrations/004-customer-sales.sql, רץ אוטומטית)
+-- ==========================================================
+-- לקוחות (מקובץ הלקוחות של פריוריטי). טעינה = עדכון/הוספה, לא מוחקת לקוחות שלא בקובץ.
+-- details = כל שאר העמודות שבקובץ (קבוצה, טלפון, נייד, פקס, כתובת, מייל, ח.פ ...) לפי שם הכותרת.
+-- עמודה שלא הופיעה בקובץ שנטען - הערך הקודם שלה נשמר.
+CREATE TABLE IF NOT EXISTS customers (
+  customer_id   BIGINT PRIMARY KEY,
+  customer_name TEXT,
+  agent_name    VARCHAR(100),             -- הסוכן בכרטיס הלקוח (שם בלבד - הקוד מגיע מקובץ המכירות)
+  details       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at    TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- מכירות חודשיות ללקוח. טעינת קובץ מחליפה רק את החודשים שמופיעים בו (שאר החודשים/השנים נשמרים).
+-- agent_code = הסוכן בשורת המכירה (היסטורי - לקוח שעבר סוכן נשאר אצל הסוכן הקודם בחודשים הקודמים).
+CREATE TABLE IF NOT EXISTS customer_sales_monthly (
+  customer_id BIGINT NOT NULL,
+  agent_code  INTEGER NOT NULL DEFAULT 0, -- 0 = ללא סוכן
+  agent_name  VARCHAR(100),
+  year        INTEGER NOT NULL,
+  month       INTEGER NOT NULL,
+  amount      NUMERIC(14,2) NOT NULL DEFAULT 0,
+  PRIMARY KEY (customer_id, agent_code, year, month)
+);
+CREATE INDEX IF NOT EXISTS customer_sales_monthly_ym ON customer_sales_monthly (year, month);
