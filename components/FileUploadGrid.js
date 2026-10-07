@@ -87,6 +87,46 @@ export const FILES = [
       </>
     ),
   },
+  {
+    key: 'bom-tree', group: 'bomorders', title: 'עצי מוצר', hint: 'פריט אב ← פריט בן, כמות ליחידה', endpoint: '/api/upload/bom-tree',
+    method: 'position', badge: 'keep',
+    format: (
+      <>
+        שורות 1-2 כותרות. <b>A</b> קוד אב, <b>B</b> שם אב, <b>C</b> קוד בן, <b>D</b> שם בן, <b>F</b> כמות ליחידה (ריק = 1).<br />
+        <b>נשמר קבוע.</b> טעינה מעדכנת רק את פריטי האב שבקובץ - אפשר לטעון קובץ חלקי (למשל עץ של מגש חדש בלבד).
+      </>
+    ),
+  },
+  {
+    key: 'bom-sales', group: 'bomorders', title: 'מכירות תקופתי', hint: 'כמות שנמכרה לכל פריט (למשל 180 יום)', endpoint: '/api/upload/bom-sales',
+    method: 'position', badge: 'replace',
+    format: (
+      <>
+        שורה 1 - טווח התאריכים (dd/mm/yyyy ... dd/mm/yyyy), ממנו מחושבת התקופה בחודשים.<br />
+        מהשורה 3: <b>A</b> קוד, <b>B</b> שם, <b>C</b> כמות, <b>E</b> סכום. כל טעינה מחליפה את הקודמת.
+      </>
+    ),
+  },
+  {
+    key: 'bom-stock', group: 'bomorders', title: 'יתרות פריטים – מטריצת מחסנים', hint: 'יתרה לכל פריט בכל מחסן', endpoint: '/api/upload/bom-stock',
+    method: 'header', badge: 'replace',
+    format: (
+      <>
+        שורה 2 - שמות המחסנים: עמודת <b>"סה"כ"</b> ועמודת <b>"ייצור"</b> מזוהות לפי השם.<br />
+        מהשורה 4: <b>A</b> קוד פריט. כל טעינה מחליפה את הקודמת.
+      </>
+    ),
+  },
+  {
+    key: 'bom-orders', group: 'bomorders', title: 'הזמנות ספקים', hint: 'כמות מוזמנת מספקים לכל פריט', endpoint: '/api/upload/bom-orders',
+    method: 'position', badge: 'replace',
+    format: (
+      <>
+        מהשורה 3: <b>A</b> קוד, <b>B</b> שם, <b>C</b> מלאי, <b>D</b> מוזמן ע"י לקוחות, <b>E</b> מוזמן מספקים, <b>F</b> עתידי.<br />
+        כל טעינה מחליפה את הקודמת.
+      </>
+    ),
+  },
 ];
 
 function fmtDate(iso) {
@@ -140,7 +180,11 @@ export default function FileUploadGrid({ fileKeys, columns = 3 }) {
 function Dropzone({ f, status: st, lastUpload, onUpload }) {
   return (
     <label style={styles.dropzone}>
-      <div style={styles.title}>{f.title}</div>
+      <div style={styles.title}>
+        {f.title}
+        {f.badge === 'keep' && <span style={styles.badgeKeep}>נשמר קבוע</span>}
+        {f.badge === 'replace' && <span style={styles.badgeReplace}>מתעדכן</span>}
+      </div>
       <div style={styles.hint}>{f.hint} · גרירה או לחיצה להעלאה</div>
 
       {st?.state === 'uploading' && <div style={styles.uploading}>מעלה...</div>}
@@ -181,6 +225,8 @@ const styles = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', textAlign: 'center',
   },
   title: { fontSize: 14, fontWeight: 700, color: '#111827' },
+  badgeKeep: { fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', marginInlineStart: 8, verticalAlign: 'middle' },
+  badgeReplace: { fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 8, background: '#f3f4f6', color: '#4b5563', marginInlineStart: 8, verticalAlign: 'middle' },
   hint: { fontSize: 12, color: '#9ca3af' },
   done: { fontSize: 12, fontWeight: 600, color: '#16a34a' },
   summary: { width: '100%', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#155e75', textAlign: 'right', lineHeight: 1.7 },

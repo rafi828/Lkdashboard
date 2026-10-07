@@ -61,6 +61,9 @@
   file-uploads.js       - recordFileUpload(fileKey, filename, userId) - שומר "הועלה לאחרונה" בטבלת file_uploads.
   mailer.js             - עטיפת nodemailer סביב SMTP. **לא עובד כרגע** - ראה "בעיה פתוחה: SMTP".
   quarterly-email-template.js - בונה HTML למייל סטטוס יעד רבעוני ללקוח (משמש את quarterly-targets-send.js).
+  bom-orders.js         - "הזמנות רכש לפי עצי מוצר": שמירת 4 הקבצים (handleBomUpload) + getBomOrdersData() לדוח.
+  bom-compute.js        - החישוב של הדוח (רץ בדפדפן): פיצוץ עץ מוצר, ממוצע חודשי, חודשי מלאי, המלצה, איחוד מגשים ישן/חדש.
+                          העתק נאמן של הכלי המקורי (HTML) - נבדק מול הייצוא שלו, תוצאה זהה.
   sku-compare.js        - "השוואת מק"טים": getSkuCompareRows(lkSkus?) - שורה סופית לכל פריט ל.כ לפי סדר עדיפות
                           החלטה ידנית > יבוא "מרובי ברקודים" > תוצאת המנוע; matchBarcodes() - התאמת ברקודים;
                           normSku() - השוואת מק"ט בלי אפסים בהתחלה.
@@ -100,6 +103,12 @@
                                 מסמן את השורות שהמק"טים שלהן (ל.כ או מתחרה) מופיעים בקובץ, עמודת "כמות", רשימת "לא זוהו".
                                 זמני - לא נשמר. ההתאמה נעשית במסך (normSku); השרת רק קורא את הקובץ.
     sku-compare-upload.js     - עמוד טעינת קבצים: תוצאות כלי ההשוואה + "מרובי ברקודים" (ייצוא פריוריטי).
+    bom-orders.js             - "הזמנות רכש לפי עצי מוצר" (נושא רכש, bomorders.view). פס "עדכניות נתונים" (כתום = קובץ ישן
+                                ביומיים+ מהעדכני / לא נטען), הגדרות חישוב (חודשי תקופה - אוטומטי מקובץ המכירות; יעד/ספים -
+                                נשמרים ב-localStorage), ריבועים לחיצים (סינון), תצוגת עץ / טבלה שטוחה, "הצג עמודות פירוט",
+                                ייצוא לאקסל (העץ פתוח כולו, עם הסינון). כל החישוב במסך (lib/bom-compute.js).
+                                המלצה = יעד חודשי מלאי × ממוצע חודשי - יתרה - מוזמן מספק ("מוזמן ע"י לקוחות" - עמודת מידע בלבד).
+    bom-orders-upload.js      - עמוד טעינת קבצים: עצי מוצר / מכירות תקופתי / יתרות מחסנים / הזמנות ספקים.
     trends.js                 - "מגמות – תקציב מול ביצוע" (targets.view). נפתח רק מכפתור "📈 מגמות" בדוח targets.js,
                                 עם כפתור חזרה. שנה/תחום/סוכן; בפועל מול יעד לפי חודש, השוואה לשנה קודמת,
                                 % השלמה מצטבר, טבלה חודשית.
@@ -125,6 +134,9 @@
                                          עדכון/הוספה; עמודה שלא בקובץ - הערך הקודם נשמר; תא ריק בעמודה שבקובץ - נמחק.
     upload/customer-sales.js           - מכירות לפי חודשים ללקוח: "לקוח", "סוכן"(קוד+שם), MM/YYYY. מחליף רק את החודשים שבקובץ
                                          (כל החודש, כל הלקוחות); עמודת חודש ריקה לגמרי - מדולגת. לקוח חסר נוסף ל-customers.
+    upload/bom-tree.js, bom-sales.js, bom-stock.js, bom-orders.js - 4 קבצי "הזמנות רכש לפי עצי מוצר" (לפי מיקום עמודה,
+                                         כמו הכלי המקורי). עצים: מחליף רק את ההרכב של פריטי האב שבקובץ, השאר נשמר.
+                                         שלושת האחרים: מחליפים את כל הטבלה. הלוגיקה ב-lib/bom-orders.js.
     upload/status.js                   - GET "הועלה לאחרונה" לכל סוגי הקבצים (מ-file_uploads).
     dashboard/targets-summary.js       - נתוני "תקציב מול ביצוע" (מחושב, כולל diff/completion/contribution/profit[null]).
     dashboard/trends.js                - נתוני מגמות "תקציב מול ביצוע": יעד+בפועל לכל חודש, לשנה שנבחרה ולקודמת (targets.view).
@@ -138,6 +150,8 @@
     dashboard/sku-compare-decision.js     - POST החלטה ידנית לפריט (approved/rejected/corrected, null = ביטול).
     dashboard/sku-compare-export.js       - POST ייצוא xlsx (lkSkus, compSkus, quantities?), כולל מק"ט סופי אחרי החלטות.
     dashboard/sku-compare-lookup.js       - POST "חיפוש לפי מסמך": parseSkuLookupFile -> שורות {code, desc, qty}. לא שומר כלום.
+    dashboard/bom-orders.js               - GET נתוני "הזמנות רכש": עצים + מכירות/מלאי/הזמנות לפריטי העצים בלבד + פרטי הטעינות.
+    dashboard/bom-orders-export.js        - POST ייצוא xlsx ({ columns, rows }) - בדיוק מה שהמסך שולח.
 /tools/signet-matching  - כלי פייתון (לא חלק מהאתר) שמייצר את קובץ ההשוואה. ראה README שם.
                           input/ work/ output/ לא נשמרים ב-Git (קטלוג החברה + קבצים זמניים).
 /public/logos
@@ -183,7 +197,7 @@ customer_quarterly_targets (
 customers (customer_id PK, customer_name, agent_name, details JSONB)           -- "מכירות ללקוח": כרטיס לקוח, details לפי כותרות הקובץ
 customer_sales_monthly (customer_id, agent_code[0=ללא], agent_name, year, month, amount, PK(customer_id,agent_code,year,month))
 
-file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'|'sku-compare'|'sku-barcodes'|'customers'|'customer-sales'], filename, uploaded_at, uploaded_by)
+file_uploads (file_key PK['classification'|'targets'|'matrix'|'quarterly'|'sku-compare'|'sku-barcodes'|'customers'|'customer-sales'|'bom-tree'|'bom-sales'|'bom-stock'|'bom-orders'], filename, uploaded_at, uploaded_by)
 
 sku_compare_items (lk_sku PK, lk_desc, lk_dept, comp_sku, comp_desc, comp_brand,
                    confidence['ודאי'|'סביר'|'לבדיקה'|'ללא התאמה'], notes, catalog_page, comp_price)  -- מוחלף בכל טעינה
@@ -191,6 +205,14 @@ sku_compare_decisions (lk_sku PK, decision['approved'|'rejected'|'corrected'], c
                        decided_by, decided_at)                            -- לא נמחק בטעינה, גובר על הכל
 sku_compare_comp_items (comp_sku PK, comp_desc, comp_brand, category, catalog_page, comp_price)  -- כל מק"טי המתחרה, מוחלף בטעינת התוצאות
 sku_compare_imports (lk_sku PK, kind['sure'|'multi'], comp_sku, options, imported_at, imported_by)  -- "מרובי ברקודים", מוחלף בטעינת הקובץ
+
+-- "הזמנות רכש לפי עצי מוצר" (migration 005)
+bom_edges (parent_code, child_code, qty, PK(parent_code, child_code))  -- עצי מוצר, נשמר קבוע; טעינה מחליפה רק את פריטי האב שבקובץ
+bom_items (code PK, name)                                              -- שמות מקובץ העצים
+bom_sales (code PK, name, qty, has_qty, amount)                        -- מכירות תקופתי, מוחלף בכל טעינה
+bom_stock (code PK, name, total, production)                           -- יתרות (סה"כ + מחסן ייצור), מוחלף בכל טעינה
+bom_supplier_orders (code PK, name, stock, by_customers, by_suppliers, future)  -- מוחלף בכל טעינה
+bom_file_info (file_key PK, info JSONB)                                -- למשל טווח התאריכים של קובץ המכירות {from, to, days}
 ```
 
 ### ⚠️ עקרון קריטי: שינוי סכימה = קובץ migration חדש (אוטומטי מאוקטובר 2026)
@@ -221,7 +243,7 @@ sku_compare_imports (lk_sku PK, kind['sure'|'multi'], comp_sku, options, importe
 - **מה מותר (אילו דוחות/פעולות):** לכל משתמש תבנית הרשאה (`permission_templates`), ומעליה חריגים אישיים
   (`user_permission_overrides`: הוסף/הסר). מפתחות ההרשאה מוגדרים ב-`lib/reports.js`:
   `targets.view`, `targets.upload`, `quarterly.view`, `quarterly.upload`, `quarterly.email`,
-  `skucompare.view`, `skucompare.upload`, `skucompare.decide`, `custsales.view` (כולל ייצוא), `custsales.upload`. Admin = הכל אוטומטית.
+  `skucompare.view`, `skucompare.upload`, `skucompare.decide`, `custsales.view` (כולל ייצוא), `custsales.upload`, `bomorders.view` (כולל ייצוא), `bomorders.upload`. Admin = הכל אוטומטית.
 - **מה רואים בתוך הדוח (`getDataScope`):** Admin ומנהל מכירות (`manager`) = כל הנתונים. סוכן (`user`) = רק
   קודי הסוכן שלו (`user_agent_codes`, יכולים להיות כמה). ב"תקציב מול ביצוע" לפי agent_code, וב"יעדים רבעוניים"
   לפי `customer_quarterly_targets.agent_code` (עמודה "קוד סוכן מלקוח - 2" בקובץ), וב"מכירות ללקוח" לפי

@@ -5,7 +5,8 @@ export default async function handler(req, res) {
   const currentUser = await requireUser(req, res);
   if (!currentUser) return;
   if (!hasPermission(currentUser, 'targets.upload') && !hasPermission(currentUser, 'quarterly.upload') &&
-      !hasPermission(currentUser, 'skucompare.upload') && !hasPermission(currentUser, 'custsales.upload')) {
+      !hasPermission(currentUser, 'skucompare.upload') && !hasPermission(currentUser, 'custsales.upload') &&
+      !hasPermission(currentUser, 'bomorders.upload')) {
     return res.status(403).json({ error: 'אין לך הרשאה לטעינת קבצים' });
   }
 
