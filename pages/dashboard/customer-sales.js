@@ -7,6 +7,11 @@ const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מא
 const PAGE_SIZE = 100;
 const GROUP_KEY = 'קבוצה'; // עמודת "קבוצה" בקובץ הלקוחות = קבוצת לקוחות
 const DETAIL_LABELS = { [GROUP_KEY]: 'קבוצת לקוחות' };
+// ריבועי KPI לחיצים: מציגים בטבלת הלקוחות רק את הלקוחות האלה
+const STATUS_FILTERS = {
+  gained: { label: 'לקוחות חדשים', test: (r) => r.cur > 0 && r.prev <= 0 },
+  lost: { label: 'לקוחות שלא חזרו', test: (r) => r.prev > 0 && r.cur <= 0 },
+};
 const TABS = [
   { key: 'agent', label: 'לפי סוכן' },
   { key: 'customer', label: 'לפי לקוח' },
@@ -39,6 +44,7 @@ export default function CustomerSalesPage() {
   const [customerSel, setCustomerSel] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
   const [showZero, setShowZero] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(null); // null | 'gained' | 'lost'
   const [monthly, setMonthly] = useState(false);
   const [tab, setTab] = useState('agent');
   const [sortKey, setSortKey] = useState('cur');
@@ -85,12 +91,21 @@ export default function CustomerSalesPage() {
   }
 
   function resetFilters() {
-    setAgentSel([]); setGroupSel([]); setCustomerSel([]); setShowZero(false);
+    setAgentSel([]); setGroupSel([]); setCustomerSel([]); setShowZero(false); setStatusFilter(null);
     if (loaded.length) applyYear(loaded[loaded.length - 1].year, loaded, periodType);
+  }
+
+  // לחיצה על "לקוחות חדשים" / "לקוחות שלא חזרו": עוברים ללשונית לקוח ומציגים רק אותם. לחיצה נוספת - ביטול.
+  function toggleStatusFilter(key) {
+    if (statusFilter === key) return setStatusFilter(null);
+    if (tab !== 'customer') changeTab('customer');
+    setStatusFilter(key);
+    setPage(0);
   }
 
   function changeTab(t) {
     setTab(t);
+    if (t !== 'customer') setStatusFilter(null);
     setSortKey(t === 'month' ? 'month' : 'cur');
     setSortDir(t === 'month' ? 'asc' : 'desc');
     setPage(0);
@@ -232,6 +247,7 @@ export default function CustomerSalesPage() {
   }, [base, data, year, cmpYear, fromMonth, toMonth, agentSel, groupSel, customerSel, showZero]);
 
   useEffect(() => setPage(0), [year, cmpYear, fromMonth, toMonth, agentSel, groupSel, customerSel, showZero]);
+  useEffect(() => { if (cmpYear === '') setStatusFilter(null); }, [cmpYear]);
 
   const periodLabel = fromMonth === toMonth ? `${mm(fromMonth)}/${year}` : `${mm(fromMonth)}–${mm(toMonth)}/${year}`;
   const cmpLabel = calc?.cmp ? (fromMonth === toMonth ? `${mm(fromMonth)}/${calc.cmp}` : `${mm(fromMonth)}–${mm(toMonth)}/${calc.cmp}`) : '';
@@ -299,8 +315,17 @@ export default function CustomerSalesPage() {
         monthCols.push({ key: `m:${m}`, label: `${mm(m)}/${year}`, type: 'money', get: (r) => r.months[m] || 0 });
       }
     }
+    const statusDef = statusFilter && calc.cmp ? STATUS_FILTERS[statusFilter] : null;
+    const rows = statusDef ? calc.customerRows.filter(statusDef.test) : calc.customerRows;
+    // סה"כ לפי השורות שבטבלה (כשמוצגים רק לקוחות חדשים / שלא חזרו - הסה"כ שלהם בלבד)
+    const sum = (get) => rows.reduce((s, r) => s + get(r), 0);
+    const custTotal = statusDef
+      ? { cur: sum((r) => r.cur), prev: sum((r) => r.prev) }
+      : { cur: total.cur, prev: total.prev };
+    custTotal.diff = custTotal.cur - custTotal.prev;
+    custTotal.change = pctChange(custTotal.cur, custTotal.prev);
     const monthTotals = {};
-    monthCols.forEach((c) => { monthTotals[c.key] = calc.monthRows.find((r) => `m:${r.month}` === c.key)?.cur || 0; });
+    monthCols.forEach((c) => { monthTotals[c.key] = sum(c.get); });
     return {
       title: 'פירוט לפי לקוח',
       columns: [
@@ -312,12 +337,13 @@ export default function CustomerSalesPage() {
         { key: 'cur', label: `מכירות ${periodLabel}`, type: 'money' },
         ...cmpCols,
       ],
-      rows: calc.customerRows,
+      rows,
       rowKey: (r) => r.id,
       paged: true,
-      total: { ...total, ...monthTotals, id: '', name: `סה"כ (${calc.customerRows.length} לקוחות)`, agent: '' },
+      statusLabel: statusDef?.label,
+      total: { ...custTotal, ...monthTotals, id: '', name: `סה"כ (${rows.length} לקוחות)`, agent: '' },
     };
-  }, [calc, tab, showDetails, monthly, data, year, fromMonth, toMonth, periodLabel, cmpLabel]);
+  }, [calc, tab, showDetails, monthly, data, year, fromMonth, toMonth, periodLabel, cmpLabel, statusFilter]);
 
   const sortedRows = useMemo(() => {
     if (!table) return [];
@@ -369,7 +395,7 @@ export default function CustomerSalesPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `מכירות ללקוח - ${TABS.find((t) => t.key === tab).label} ${periodLabel.replace('/', '-')}.xlsx`;
+      a.download = `מכירות ללקוח - ${table.statusLabel || TABS.find((t) => t.key === tab).label} ${periodLabel.replace('/', '-')}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -386,9 +412,11 @@ export default function CustomerSalesPage() {
     if (!calc) return [];
     if (tab === 'month') return calc.monthRows.map((r) => ({ label: MONTH_NAMES[r.month - 1], cur: r.cur, prev: r.prev }));
     if (tab === 'agent') return [...calc.agentRows].sort((a, b) => b.cur - a.cur).map((r) => ({ label: r.name || String(r.code), cur: r.cur, prev: r.prev }));
-    return [...calc.customerRows].sort((a, b) => b.cur - a.cur).slice(0, 15).map((r) => ({ label: r.name, cur: r.cur, prev: r.prev }));
-  }, [calc, tab]);
-  const chartTitle = tab === 'month' ? 'מכירות לפי חודש' : tab === 'agent' ? 'מכירות לפי סוכן' : '15 הלקוחות המובילים';
+    const rows = table?.rows || calc.customerRows;
+    return [...rows].sort((a, b) => Math.max(b.cur, b.prev) - Math.max(a.cur, a.prev)).slice(0, 15).map((r) => ({ label: r.name, cur: r.cur, prev: r.prev }));
+  }, [calc, tab, table]);
+  const chartTitle = tab === 'month' ? 'מכירות לפי חודש' : tab === 'agent' ? 'מכירות לפי סוכן'
+    : table?.statusLabel ? `${table.statusLabel} - 15 הגדולים` : '15 הלקוחות המובילים';
 
   const loadedText = loaded.map((l) => `${mm(Math.min(...l.months))}–${mm(Math.max(...l.months))}/${l.year}`).join(' · ');
   const totalChange = calc ? pctChange(calc.totalCur, calc.totalPrev) : null;
@@ -467,8 +495,12 @@ export default function CustomerSalesPage() {
             <Kpi label={calc.cmp ? `אותה תקופה ${calc.cmp}` : 'שנת השוואה'} value={calc.cmp ? fmt(calc.totalPrev) : '—'} sub={calc.cmp ? `${calc.buyersPrev} לקוחות קונים` : 'לא נבחרה'} />
             <Kpi label="הפרש" value={calc.cmp ? fmt(calc.totalCur - calc.totalPrev) : '—'} tone={calc.cmp ? toneOf(calc.totalCur - calc.totalPrev) : undefined} />
             <Kpi label="% שינוי" value={calc.cmp ? fmtChange(totalChange) : '—'} tone={calc.cmp ? toneOf(totalChange) : undefined} />
-            <Kpi label="לקוחות חדשים" value={calc.cmp ? calc.gained : '—'} sub="קנו השנה ולא באותה תקופה אשתקד" tone="good" />
-            <Kpi label="לקוחות שלא חזרו" value={calc.cmp ? calc.lost : '—'} sub="קנו אשתקד ולא השנה" tone="bad" />
+            <Kpi label="לקוחות חדשים" value={calc.cmp ? calc.gained : '—'} tone="good"
+              sub={statusFilter === 'gained' ? '✓ מוצגים בטבלה · לחץ לביטול' : calc.cmp ? 'קנו השנה ולא באותה תקופה אשתקד · לחץ להצגה' : 'קנו השנה ולא באותה תקופה אשתקד'}
+              onClick={calc.cmp ? () => toggleStatusFilter('gained') : undefined} active={statusFilter === 'gained'} />
+            <Kpi label="לקוחות שלא חזרו" value={calc.cmp ? calc.lost : '—'} tone="bad"
+              sub={statusFilter === 'lost' ? '✓ מוצגים בטבלה · לחץ לביטול' : calc.cmp ? 'קנו אשתקד ולא השנה · לחץ להצגה' : 'קנו אשתקד ולא השנה'}
+              onClick={calc.cmp ? () => toggleStatusFilter('lost') : undefined} active={statusFilter === 'lost'} />
           </div>
 
           {/* גרף */}
@@ -489,6 +521,11 @@ export default function CustomerSalesPage() {
                     <Check checked={monthly} onChange={setMonthly} label="פירוט חודשי" disabled={fromMonth === toMonth} />
                     <Check checked={showZero} onChange={setShowZero} label="הצג גם לקוחות ללא מכירות" />
                   </>
+                )}
+                {table.statusLabel && (
+                  <button onClick={() => setStatusFilter(null)} style={styles.statusChip} title="הצג את כל הלקוחות">
+                    מוצגים רק: {table.statusLabel} ✕
+                  </button>
                 )}
                 <div style={{ fontSize: 12, color: '#6b7280' }}>{sortedRows.length} שורות</div>
               </div>
@@ -590,10 +627,11 @@ function FilterField({ label, children }) {
   );
 }
 
-function Kpi({ label, value, sub, tone }) {
+function Kpi({ label, value, sub, tone, onClick, active }) {
   const color = tone === 'good' ? '#16a34a' : tone === 'bad' ? '#dc2626' : '#111827';
+  const clickStyle = onClick ? { cursor: 'pointer', ...(active ? { borderColor: color, boxShadow: `0 0 0 1px ${color}`, background: tone === 'good' ? '#f0fdf4' : '#fef2f2' } : null) } : null;
   return (
-    <div style={styles.kpi}>
+    <div style={{ ...styles.kpi, ...clickStyle }} onClick={onClick} role={onClick ? 'button' : undefined}>
       <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
       <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#9ca3af' }}>{sub}</div>}
@@ -668,4 +706,5 @@ const styles = {
   detailTh: { background: '#f0f9ff' },
   detailTd: { background: '#f8fcff', color: '#374151' },
   badge: { fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 10 },
+  statusChip: { fontSize: 12, fontWeight: 700, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', whiteSpace: 'nowrap' },
 };
