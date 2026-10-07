@@ -197,6 +197,9 @@ function Dropzone({ f, status: st, lastUpload, onUpload }) {
           <span>הועלה לאחרונה:</span>
           <span style={styles.lastUploadFname}>{lastUpload.filename}</span>
           <span>{fmtDate(lastUpload.uploadedAt)}</span>
+          {lastUpload.details?.map((d) => (
+            <span key={d} style={d.startsWith('⚠') ? styles.lastUploadWarn : undefined}>{d}</span>
+          ))}
         </div>
       )}
       {!st && !lastUpload && <div style={styles.lastUploadEmpty}>עדיין לא הועלה קובץ</div>}
@@ -236,6 +239,7 @@ const styles = {
     width: '100%', marginTop: 6, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8,
     padding: '9px 12px', fontSize: 12, color: '#15803d', display: 'flex', flexDirection: 'column', gap: 2,
   },
+  lastUploadWarn: { color: '#c2410c', fontWeight: 600 },
   lastUploadFname: { fontWeight: 700, color: '#111827', wordBreak: 'break-all' },
   lastUploadEmpty: {
     width: '100%', marginTop: 6, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
