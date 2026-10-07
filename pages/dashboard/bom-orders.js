@@ -38,7 +38,6 @@ const COLUMNS = [
 
 const fmt = (v, d = 0) => (v === null || v === undefined || !Number.isFinite(v) ? '—'
   : v.toLocaleString('he-IL', { minimumFractionDigits: d, maximumFractionDigits: d }));
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('he-IL') : '');
 const kindLabel = (it) => (it.isRoot ? 'מכלול עליון' : it.isLeaf ? 'רכיב סופי' : 'רכיב ביניים');
 
 function loadSettings() {
@@ -137,7 +136,6 @@ function BomOrders() {
     return (
       <div style={styles.page}>
         {header}
-        <Freshness files={data.files} edgesCount={0} />
         <div style={{ ...styles.card, ...styles.empty }}>
           עדיין לא נטענו עצי מוצר. כדי שהדוח יוצג, יש לטעון לפחות את קובץ <b>עצי המוצר</b> במסך "טעינת קבצים".
         </div>
@@ -288,7 +286,6 @@ function BomOrders() {
   return (
     <div style={styles.page}>
       {header}
-      <Freshness files={data.files} edgesCount={data.edges.length} />
 
       <div style={{ ...styles.card, ...styles.settings }}>
         <span style={styles.setTitle}>הגדרות חישוב</span>
@@ -387,51 +384,6 @@ function Field({ label, note, value, step, onChange }) {
   );
 }
 
-// פס "עדכניות נתונים": מתי נטען כל קובץ. קובץ "תמונת מצב" שישן ביותר מיומיים מהעדכני שבהם - מסומן בכתום.
-function Freshness({ files, edgesCount }) {
-  const snapKeys = ['bom-sales', 'bom-stock', 'bom-orders'];
-  const newest = Math.max(0, ...snapKeys.map((k) => (files[k] ? new Date(files[k].uploadedAt).getTime() : 0)));
-  const lagDays = (k) => (files[k] ? Math.floor((newest - new Date(files[k].uploadedAt).getTime()) / 86400000) : null);
-  const sales = files['bom-sales'];
-
-  const boxes = [
-    {
-      title: 'עצי מוצר', keep: true,
-      main: files['bom-tree'] ? `${fmt(edgesCount)} קשרי אב-בן` : 'לא נטען',
-      sub: files['bom-tree'] ? `עודכן לאחרונה ${fmtDate(files['bom-tree'].uploadedAt)}` : '',
-      warn: !files['bom-tree'],
-    },
-    {
-      key: 'bom-sales', title: 'מכירות תקופתי',
-      main: sales ? (sales.info?.from ? `${sales.info.from} – ${sales.info.to}` : fmtDate(sales.uploadedAt)) : 'לא נטען',
-      sub: sales ? `${sales.info?.days ? `${fmt(sales.info.days)} ימים · ` : ''}נטען ${fmtDate(sales.uploadedAt)}` : '',
-    },
-    { key: 'bom-stock', title: 'יתרות מלאי', main: files['bom-stock'] ? fmtDate(files['bom-stock'].uploadedAt) : 'לא נטען', sub: files['bom-stock'] ? 'כל המחסנים, כולל ייצור' : '' },
-    { key: 'bom-orders', title: 'הזמנות ספקים', main: files['bom-orders'] ? fmtDate(files['bom-orders'].uploadedAt) : 'לא נטען', sub: '' },
-  ];
-  boxes.forEach((b) => {
-    if (!b.key) return;
-    if (!files[b.key]) { b.warn = true; return; }
-    const lag = lagDays(b.key);
-    if (lag >= 2) { b.warn = true; b.sub = `⚠ ישן ב-${lag} ימים מהקובץ העדכני`; }
-  });
-
-  return (
-    <div style={styles.fresh}>
-      {boxes.map((b) => (
-        <div key={b.title} style={{ ...styles.fr, ...(b.warn ? styles.frWarn : {}) }}>
-          <div style={styles.frTitle}>
-            {b.title}
-            <span style={b.keep ? styles.tagKeep : styles.tagRepl}>{b.keep ? 'נשמר קבוע' : 'מתעדכן'}</span>
-          </div>
-          <div style={styles.frMain}>{b.main}</div>
-          {b.sub && <div style={{ ...styles.frSub, ...(b.warn ? { color: '#c2410c', fontWeight: 600 } : {}) }}>{b.sub}</div>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 const styles = {
   page: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: -12 },
   headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
@@ -442,14 +394,6 @@ const styles = {
   empty: { fontSize: 14, color: '#374151', lineHeight: 1.7 },
   uploadBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#111827', background: '#fff', border: '1px solid #d1d5db', borderRadius: 9, padding: '9px 14px', cursor: 'pointer', whiteSpace: 'nowrap' },
   exportBtn: { fontSize: 12, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600 },
-  fresh: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8 },
-  fr: { background: '#fff', border: '1px solid #e9e9ec', borderRadius: 10, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2 },
-  frWarn: { borderColor: '#fdba74', background: '#fff7ed' },
-  frTitle: { fontSize: 11.5, color: '#6b7280', fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 6 },
-  frMain: { fontSize: 13, fontWeight: 700, color: '#111827' },
-  frSub: { fontSize: 11, color: '#6b7280' },
-  tagKeep: { fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', whiteSpace: 'nowrap' },
-  tagRepl: { fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 8, background: '#f3f4f6', color: '#4b5563', whiteSpace: 'nowrap' },
   settings: { display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' },
   setTitle: { fontSize: 13, fontWeight: 700, alignSelf: 'center', color: '#111827' },
   field: { display: 'flex', flexDirection: 'column', gap: 3 },
