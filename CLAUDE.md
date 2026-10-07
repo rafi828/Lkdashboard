@@ -115,7 +115,7 @@
     permission-templates/index.js, [id].js - CRUD תבניות הרשאה (admin only; מחיקה חסומה אם יש משתמשים משויכים).
     upload/classification.js           - טעינת קובץ סיווג סוכנים לתחומים (מבוסס מיקום עמודה קבוע!).
     upload/targets.js                  - טעינת קובץ יעדים חודשיים (מבוסס כותרת "קוד סוכן" + שמות חודשים).
-    upload/sales-matrix.js             - טעינת מטריצת מכירות חודשית (מבוסס כותרת "סוכן" + MM/YYYY).
+    upload/sales-matrix.js             - טעינת מטריצת מכירות חודשית (מבוסס כותרת "סוכן" + MM/YYYY). מקבל גם ייצוא ישיר מפריוריטי (HTML UTF-16 .xls).
     upload/quarterly-targets.js        - טעינת קובץ יעדים רבעוניים ללקוח (מבוסס כותרות מדויקות).
     upload/sku-compare.js              - טעינת קובץ תוצאות ההשוואה (גיליונות "התאמות" + "ל.כ ללא התאמה", לפי כותרות).
                                          מחליף את sku_compare_items + sku_compare_comp_items; לא נוגע בהחלטות וביבוא.
