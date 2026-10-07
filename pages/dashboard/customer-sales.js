@@ -419,7 +419,19 @@ export default function CustomerSalesPage() {
     : table?.statusLabel ? `${table.statusLabel} - 15 הגדולים` : '15 הלקוחות המובילים';
 
   const loadedText = loaded.map((l) => `${mm(Math.min(...l.months))}–${mm(Math.max(...l.months))}/${l.year}`).join(' · ');
-  const totalChange = calc ? pctChange(calc.totalCur, calc.totalPrev) : null;
+  // ריבועי הסיכום: כשלוחצים על "לקוחות חדשים" / "לקוחות שלא חזרו" - הסיכומים הם של הלקוחות האלה בלבד
+  const kpi = useMemo(() => {
+    if (!calc) return null;
+    const rows = table?.statusLabel ? table.rows : calc.customerRows;
+    const cur = table?.statusLabel ? table.total.cur : calc.totalCur;
+    const prev = table?.statusLabel ? table.total.prev : calc.totalPrev;
+    return {
+      cur, prev, diff: cur - prev, change: pctChange(cur, prev),
+      buyersCur: rows.filter((r) => r.cur > 0).length,
+      buyersPrev: rows.filter((r) => r.prev > 0).length,
+      suffix: table?.statusLabel ? ` · ${table.statusLabel} בלבד` : '',
+    };
+  }, [calc, table]);
 
   return (
     <Layout permission="custsales.view">
@@ -491,10 +503,10 @@ export default function CustomerSalesPage() {
 
           {/* KPI */}
           <div style={styles.kpiGrid}>
-            <Kpi label={`מכירות ${periodLabel}`} value={fmt(calc.totalCur)} sub={`${calc.buyersCur} לקוחות קונים`} />
-            <Kpi label={calc.cmp ? `אותה תקופה ${calc.cmp}` : 'שנת השוואה'} value={calc.cmp ? fmt(calc.totalPrev) : '—'} sub={calc.cmp ? `${calc.buyersPrev} לקוחות קונים` : 'לא נבחרה'} />
-            <Kpi label="הפרש" value={calc.cmp ? fmt(calc.totalCur - calc.totalPrev) : '—'} tone={calc.cmp ? toneOf(calc.totalCur - calc.totalPrev) : undefined} />
-            <Kpi label="% שינוי" value={calc.cmp ? fmtChange(totalChange) : '—'} tone={calc.cmp ? toneOf(totalChange) : undefined} />
+            <Kpi label={`מכירות ${periodLabel}${kpi.suffix}`} value={fmt(kpi.cur)} sub={`${kpi.buyersCur} לקוחות קונים`} highlight={!!kpi.suffix} />
+            <Kpi label={calc.cmp ? `אותה תקופה ${calc.cmp}${kpi.suffix}` : 'שנת השוואה'} value={calc.cmp ? fmt(kpi.prev) : '—'} sub={calc.cmp ? `${kpi.buyersPrev} לקוחות קונים` : 'לא נבחרה'} highlight={!!kpi.suffix} />
+            <Kpi label={`הפרש${kpi.suffix}`} value={calc.cmp ? fmt(kpi.diff) : '—'} tone={calc.cmp ? toneOf(kpi.diff) : undefined} highlight={!!kpi.suffix} />
+            <Kpi label={`% שינוי${kpi.suffix}`} value={calc.cmp ? fmtChange(kpi.change) : '—'} tone={calc.cmp ? toneOf(kpi.change) : undefined} highlight={!!kpi.suffix} />
             <Kpi label="לקוחות חדשים" value={calc.cmp ? calc.gained : '—'} tone="good"
               sub={statusFilter === 'gained' ? '✓ מוצגים בטבלה · לחץ לביטול' : calc.cmp ? 'קנו השנה ולא באותה תקופה אשתקד · לחץ להצגה' : 'קנו השנה ולא באותה תקופה אשתקד'}
               onClick={calc.cmp ? () => toggleStatusFilter('gained') : undefined} active={statusFilter === 'gained'} />
@@ -627,11 +639,11 @@ function FilterField({ label, children }) {
   );
 }
 
-function Kpi({ label, value, sub, tone, onClick, active }) {
+function Kpi({ label, value, sub, tone, onClick, active, highlight }) {
   const color = tone === 'good' ? '#16a34a' : tone === 'bad' ? '#dc2626' : '#111827';
   const clickStyle = onClick ? { cursor: 'pointer', ...(active ? { borderColor: color, boxShadow: `0 0 0 1px ${color}`, background: tone === 'good' ? '#f0fdf4' : '#fef2f2' } : null) } : null;
   return (
-    <div style={{ ...styles.kpi, ...clickStyle }} onClick={onClick} role={onClick ? 'button' : undefined}>
+    <div style={{ ...styles.kpi, ...(highlight ? { background: '#fffbeb', borderColor: '#fde68a' } : null), ...clickStyle }} onClick={onClick} role={onClick ? 'button' : undefined}>
       <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
       <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#9ca3af' }}>{sub}</div>}
