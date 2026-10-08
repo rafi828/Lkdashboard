@@ -4,6 +4,7 @@ const { requirePermission } = require('../../../lib/access');
 const { getSkuCompareRows, DECISION_LABELS } = require('../../../lib/sku-compare');
 
 const SOURCE_LABELS = { engine: 'מנוע ההשוואה', barcodes: 'מרובי ברקודים' };
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' }) : '');
 
 // POST { lkSkus: [...], compSkus: [...] } - השורות לייצוא (המסומנות, או כל מה שמוצג בטבלה כשלא סומן כלום).
 // compSkus = שורות "סיגנט ללא התאמה" (פריט מתחרה בלי פריט ל.כ).
@@ -42,7 +43,9 @@ export default async function handler(req, res) {
     'מקור': SOURCE_LABELS[r.source],
     'החלטה': r.decision ? DECISION_LABELS[r.decision] : r.import_kind === 'sure' ? 'יבוא ידני' : '',
     'הערת החלטה': r.decision_note || '',
-    'הוחלט ע"י': r.decided_by_name || '',
+    // החלטה ידנית -> מי החליט; "יבוא ידני" -> מי טען את קובץ מרובי הברקודים
+    'הוחלט ע"י': r.decision ? r.decided_by_name || '' : r.import_kind === 'sure' ? r.imported_by_name || '' : '',
+    'תאריך החלטה': fmtDate(r.decision ? r.decided_at : r.import_kind === 'sure' ? r.imported_at : null),
     'הערות': r.notes || '',
     'עמוד בקטלוג': r.catalog_page || '',
     'מחיר מחירון מתחרה (₪)': r.comp_price ?? '',
@@ -59,13 +62,14 @@ export default async function handler(req, res) {
     'החלטה': '',
     'הערת החלטה': '',
     'הוחלט ע"י': '',
+    'תאריך החלטה': '',
     'הערות': '',
     'עמוד בקטלוג': c.catalog_page || '',
     'מחיר מחירון מתחרה (₪)': c.comp_price ?? '',
   })));
 
   const ws = XLSX.utils.json_to_sheet(exportRows);
-  ws['!cols'] = (quantities ? [10] : []).concat([12, 40, 22, 16, 16, 40, 10, 14, 14, 10, 24, 12, 40, 10, 12]).map((wch) => ({ wch }));
+  ws['!cols'] = (quantities ? [10] : []).concat([12, 40, 22, 16, 16, 40, 10, 14, 14, 10, 24, 12, 12, 40, 10, 12]).map((wch) => ({ wch }));
   const wb = XLSX.utils.book_new();
   wb.Workbook = { Views: [{ RTL: true }] };
   XLSX.utils.book_append_sheet(wb, ws, 'השוואת מק"טים');

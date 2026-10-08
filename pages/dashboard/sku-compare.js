@@ -46,6 +46,14 @@ const effectiveSku = (r) => (r.decision === 'corrected' ? r.corrected_sku : r.de
 // "ממתין להחלטה" = יש התאמה (מהמנוע, או "לבדיקה" מהברקודים) ועוד לא הוחלט עליה. "יבוא ידני" ודאי לא ממתין.
 const isPending = (r) => !r.isSig && r.confidence !== 'ללא התאמה' && !r.decision && r.import_kind !== 'sure';
 
+const DELETED_USER = 'משתמש שנמחק';
+// מי החליט על השורה ומתי: החלטה ידנית, או "יבוא ידני" (מי טען את קובץ מרובי הברקודים). null = אין החלטה.
+function actorOf(r) {
+  if (r.decision) return { kind: 'user', name: r.decided_by_name || DELETED_USER, at: r.decided_at };
+  if (r.import_kind === 'sure') return { kind: 'import', name: r.imported_by_name || DELETED_USER, at: r.imported_at };
+  return null;
+}
+
 export default function SkuComparePage() {
   return (
     <Layout permission="skucompare.view">
@@ -69,6 +77,9 @@ function SkuCompare() {
   const [confidence, setConfidence] = useState('');
   const [source, setSource] = useState('');
   const [decisionFilter, setDecisionFilter] = useState('');
+  const [decider, setDecider] = useState(''); // '' | 'none' | 'import' | 'user:<שם>'
+  const [dateFrom, setDateFrom] = useState(''); // yyyy-mm-dd, תאריך ההחלטה
+  const [dateTo, setDateTo] = useState('');
   const [onlyMarked, setOnlyMarked] = useState(false);
   const [marked, setMarked] = useState(() => new Set());
   const [sortKey, setSortKey] = useState(null);
@@ -135,6 +146,14 @@ function SkuCompare() {
       if (decisionFilter === 'none' && !isPending(r)) return false;
       if (decisionFilter === 'import' && !(r.import_kind === 'sure' && !r.decision)) return false;
       if (decisionFilter && !['none', 'import'].includes(decisionFilter) && r.decision !== decisionFilter) return false;
+      if (decider || dateFrom || dateTo) {
+        const a = actorOf(r);
+        if (decider === 'none' && !isPending(r)) return false;
+        if (decider === 'import' && a?.kind !== 'import') return false;
+        if (decider.startsWith('user:') && !(a?.kind === 'user' && a.name === decider.slice(5))) return false;
+        if (dateFrom && !(a?.at && new Date(a.at) >= new Date(`${dateFrom}T00:00:00`))) return false;
+        if (dateTo && !(a?.at && new Date(a.at) <= new Date(`${dateTo}T23:59:59.999`))) return false;
+      }
       if (q) {
         const hay = [r.lk_sku, r.lk_desc, r.comp_sku, r.engine_comp_sku, r.corrected_sku, r.comp_desc, r.comp_brand, r.notes, r.decision_note]
           .filter(Boolean).join(' ').toLowerCase();
@@ -154,10 +173,21 @@ function SkuCompare() {
       });
     }
     return out;
-  }, [allRows, search, dept, confidence, source, decisionFilter, onlyMarked, marked, sortKey, sortDir]);
+  }, [allRows, search, dept, confidence, source, decisionFilter, decider, dateFrom, dateTo, onlyMarked, marked, sortKey, sortDir]);
+
+  // אפשרויות "הוחלט ע"י": כל מי שקיבל לפחות החלטה ידנית אחת, עם מספר ההחלטות
+  const deciderOptions = useMemo(() => {
+    const byName = new Map();
+    rows.forEach((r) => {
+      const a = actorOf(r);
+      if (a?.kind === 'user') byName.set(a.name, (byName.get(a.name) || 0) + 1);
+    });
+    return [...byName.entries()].sort((x, y) => y[1] - x[1]);
+  }, [rows]);
+  const importCount = useMemo(() => rows.filter((r) => actorOf(r)?.kind === 'import').length, [rows]);
 
   // כל שינוי בסינון/מיון מחזיר לעמוד הראשון
-  useEffect(() => { setPage(0); }, [search, dept, confidence, source, decisionFilter, onlyMarked, sortKey, sortDir]);
+  useEffect(() => { setPage(0); }, [search, dept, confidence, source, decisionFilter, decider, dateFrom, dateTo, onlyMarked, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -253,7 +283,7 @@ function SkuCompare() {
   }
 
   function resetFilters() {
-    setSearch(''); setDept(''); setConfidence(''); setSource(''); setDecisionFilter(''); setOnlyMarked(false); setSortKey(null);
+    setSearch(''); setDept(''); setConfidence(''); setSource(''); setDecisionFilter(''); setDecider(''); setDateFrom(''); setDateTo(''); setOnlyMarked(false); setSortKey(null);
   }
 
   const kpiSelected = (k) => confidence === k.confidence && source === k.source;
@@ -404,6 +434,18 @@ function SkuCompare() {
                 <option value="rejected">נדחה</option>
                 <option value="corrected">תוקן</option>
               </select>
+              <select value={decider} onChange={(e) => setDecider(e.target.value)} style={styles.select}>
+                <option value="">הוחלט ע"י: כולם</option>
+                {deciderOptions.map(([name, n]) => <option key={name} value={`user:${name}`}>{name} ({n.toLocaleString('he-IL')})</option>)}
+                <option value="import">יבוא ידני – מרובי ברקודים ({importCount.toLocaleString('he-IL')})</option>
+                <option value="none">ממתין להחלטה</option>
+              </select>
+              <span style={styles.dateRange} title="תאריך ההחלטה (או תאריך טעינת מרובי הברקודים)">
+                תאריך החלטה
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={styles.dateInput} />
+                עד
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={styles.dateInput} />
+              </span>
               <button onClick={resetFilters} style={styles.resetBtn}>איפוס סינון</button>
             </div>
 
@@ -533,11 +575,14 @@ function Row({ r, marked, onMark, canDecide, onDecide, onFix, lookup }) {
               title={[[r.decided_by_name, fmtDate(r.decided_at)].filter(Boolean).join(' · '), r.decision_note].filter(Boolean).join('\n')}>
               {DECISION_LABELS[r.decision]}{r.decision_note ? ' 💬' : ''}
             </span>
+            <span style={styles.who} title={fmtDate(r.decided_at)}>{r.decided_by_name || DELETED_USER}</span>
             {canDecide && <button onClick={() => onDecide(r.lk_sku, null)} style={{ ...styles.act, ...styles.actUndo }}>ביטול</button>}
           </div>
         ) : r.import_kind === 'sure' ? (
           <div style={styles.actions}>
-            <span style={{ ...styles.badge, background: IMPORT_STYLE, color: '#fff' }}>יבוא ידני</span>
+            <span style={{ ...styles.badge, background: IMPORT_STYLE, color: '#fff', cursor: 'help' }}
+              title={`נטען ע"י ${r.imported_by_name || DELETED_USER}${r.imported_at ? ` · ${fmtDate(r.imported_at)}` : ''}`}>יבוא ידני</span>
+            <span style={styles.who} title={fmtDate(r.imported_at)}>{r.imported_by_name || DELETED_USER}</span>
             {canDecide && <button onClick={() => onDecide(r.lk_sku, 'rejected')} style={{ ...styles.act, ...styles.actRej }}>✗ דחייה</button>}
             {canDecide && <button onClick={onFix} style={{ ...styles.act, ...styles.actFix }}>✎ תיקון</button>}
           </div>
@@ -713,6 +758,9 @@ function FixModal({ row, onClose, onSave }) {
 const styles = {
   page: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: -12 },
   headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  who: { flexShrink: 0, fontSize: 10.5, color: '#6b7280', whiteSpace: 'nowrap' },
+  dateRange: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280', whiteSpace: 'nowrap' },
+  dateInput: { fontSize: 12.5, padding: '6px 6px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' },
   headerBtns: { display: 'flex', gap: 8, flexShrink: 0 },
   qty: { fontWeight: 700, color: '#0f766e', textAlign: 'center', padding: '5px 4px' },
   thQty: { cursor: 'default', padding: '7px 4px', color: '#0f766e' },
@@ -754,7 +802,7 @@ const styles = {
   arrow: { color: '#d1d5db', fontSize: 10 },
   td: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', whiteSpace: 'nowrap' },
   tdCheck: { padding: '5px 6px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top' },
-  tdWide: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 110, maxWidth: 200 },
+  tdWide: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 100, maxWidth: 200 },
   tdMid: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 70, maxWidth: 100 },
   tdNote: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'top', minWidth: 80, maxWidth: 150, color: '#6b7280', fontSize: 11 },
   sku: { fontFamily: 'Consolas, monospace', fontWeight: 700 },
